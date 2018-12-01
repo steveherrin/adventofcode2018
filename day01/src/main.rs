@@ -4,7 +4,6 @@ use std::collections::HashSet;
 use std::env;
 use std::fs;
 
-
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
@@ -25,7 +24,9 @@ fn change_freq(changes: &String) -> i64 {
     /// # Arguments
     ///
     /// * `changes` - a whitespace-separated list of ±integer frequency changes
-    changes.split_whitespace().fold(0, |freq, change| freq + change.parse::<i64>().unwrap())
+    changes
+        .split_whitespace()
+        .fold(0, |freq, change| freq + change.parse::<i64>().unwrap())
 }
 
 fn calibrate_freq(input: &String) -> i64 {
@@ -60,10 +61,22 @@ mod tests {
         }
 
         let cases: Vec<TestCase> = vec![
-            TestCase { input: String::from("+1\n-2\n+3\n+1\n"), output: 3 },
-            TestCase { input: String::from("+1\n+1\n+1\n"), output: 3 },
-            TestCase { input: String::from("+1\n+1\n-2\n"), output: 0 },
-            TestCase { input: String::from("-1\n-2\n-3\n"), output: -6 },
+            TestCase {
+                input: String::from("+1\n-2\n+3\n+1\n"),
+                output: 3,
+            },
+            TestCase {
+                input: String::from("+1\n+1\n+1\n"),
+                output: 3,
+            },
+            TestCase {
+                input: String::from("+1\n+1\n-2\n"),
+                output: 0,
+            },
+            TestCase {
+                input: String::from("-1\n-2\n-3\n"),
+                output: -6,
+            },
         ];
 
         for ref case in &cases[..] {
@@ -79,10 +92,22 @@ mod tests {
         }
 
         let cases: Vec<TestCase> = vec![
-            TestCase { input: String::from("+1\n-1\n"), output: 0 },
-            TestCase { input: String::from("+3\n+3\n+4\n-2\n-4\n"), output: 10 },
-            TestCase { input: String::from("-6\n+3\n+8\n+5\n-6\n"), output: 5 },
-            TestCase { input: String::from("+7\n+7\n-2\n-7\n-4\n"), output: 14 },
+            TestCase {
+                input: String::from("+1\n-1\n"),
+                output: 0,
+            },
+            TestCase {
+                input: String::from("+3\n+3\n+4\n-2\n-4\n"),
+                output: 10,
+            },
+            TestCase {
+                input: String::from("-6\n+3\n+8\n+5\n-6\n"),
+                output: 5,
+            },
+            TestCase {
+                input: String::from("+7\n+7\n-2\n-7\n-4\n"),
+                output: 14,
+            },
         ];
 
         for ref case in &cases[..] {
