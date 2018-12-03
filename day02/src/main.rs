@@ -23,7 +23,7 @@ fn main() {
     }
 }
 
-fn count_letters(id: &String) -> HashMap<char, u64> {
+fn count_letters(id: &str) -> HashMap<char, u64> {
     /// Given an id, return a map of letter to number of occurrences in the id
     let mut counts: HashMap<char, u64> = HashMap::new();
     for c in id.chars() {
@@ -39,7 +39,7 @@ struct ChecksumItem {
     contains_3: bool,
 }
 
-fn id_to_checksum_item(id: &String) -> ChecksumItem {
+fn id_to_checksum_item(id: &str) -> ChecksumItem {
     /// Given an id, return a struct of the information needed to compute the checksum
     let mut item: ChecksumItem = ChecksumItem {
         contains_2: false,
@@ -55,7 +55,7 @@ fn id_to_checksum_item(id: &String) -> ChecksumItem {
     item
 }
 
-fn checksum(ids: &Vec<String>) -> u64 {
+fn checksum(ids: &[String]) -> u64 {
     /// Given ids, return the checksum of the set
     let (n_2, n_3) = ids
         .iter()
@@ -66,7 +66,7 @@ fn checksum(ids: &Vec<String>) -> u64 {
     n_2 * n_3
 }
 
-fn are_similar(s1: &String, s2: &String) -> bool {
+fn are_similar(s1: &str, s2: &str) -> bool {
     /// return if the two strings are similar (differing in at most 1 place)
     let n_dif = Iterator::zip(s1.chars(), s2.chars())
         .filter(|(c1, c2)| c1 != c2)
@@ -74,7 +74,7 @@ fn are_similar(s1: &String, s2: &String) -> bool {
     n_dif <= 1
 }
 
-fn common_for_similar_ids(ids: &Vec<String>) -> String {
+fn common_for_similar_ids(ids: &[String]) -> String {
     /// return the common characters between two similar ids
     for i in 1..ids.len() {
         let s1 = &ids[i - 1];

@@ -18,7 +18,7 @@ fn main() {
     }
 }
 
-fn change_freq(changes: &String) -> i64 {
+fn change_freq(changes: &str) -> i64 {
     /// Given frequency changes, return the final frequency
     ///
     /// # Arguments
@@ -29,7 +29,7 @@ fn change_freq(changes: &String) -> i64 {
         .fold(0, |freq, change| freq + change.parse::<i64>().unwrap())
 }
 
-fn calibrate_freq(input: &String) -> i64 {
+fn calibrate_freq(input: &str) -> i64 {
     /// Given frequency changes, find the first repeated frequency after applying them repeatedly
     ///
     /// # Arguments
@@ -41,7 +41,7 @@ fn calibrate_freq(input: &String) -> i64 {
 
     for change in input.split_whitespace().cycle() {
         past_freqs.insert(freq);
-        freq = freq + change.parse::<i64>().unwrap();
+        freq += change.parse::<i64>().unwrap();
         if past_freqs.contains(&freq) {
             break;
         }
