@@ -46,16 +46,24 @@ impl FromStr for Claim {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // right now this panics if there are missing fields;
-        // there should be a way to do this more monadically
+        // rather than really deal with the Options from .get()
+        // I abuse `unwrap_or` and  rely on the integer
+        // parsing to avoid having to return Errors manually
         let fields: Vec<&str> = s.split_whitespace().collect();
-        let id = fields[0].trim_left_matches('#').parse::<u64>()?;
-        let edges: Vec<&str> = fields[2].trim_end_matches(':').split(',').collect();
-        let x = edges[0].parse::<usize>()?;
-        let y = edges[1].parse::<usize>()?;
-        let size: Vec<&str> = fields[3].split('x').collect();
-        let width = size[0].parse::<usize>()?;
-        let height = size[1].parse::<usize>()?;
+
+        let raw_id = fields.get(0).unwrap_or(&"");
+        let id = raw_id.trim_left_matches('#').parse::<u64>()?;
+
+        let raw_edges = fields.get(2).unwrap_or(&"");
+        let edges: Vec<&str> = raw_edges.trim_end_matches(':').split(',').collect();
+        let x = edges.get(0).unwrap_or(&"").parse::<usize>()?;
+        let y = edges.get(1).unwrap_or(&"").parse::<usize>()?;
+
+        let raw_size = fields.get(3).unwrap_or(&"");
+        let size: Vec<&str> = raw_size.split('x').collect();
+        let width = size.get(0).unwrap_or(&"").parse::<usize>()?;
+        let height = size.get(1).unwrap_or(&"").parse::<usize>()?;
+
         Ok(Self {
             id,
             x,
@@ -130,6 +138,26 @@ mod tests {
 
         for ref case in &cases[..] {
             assert_eq!(case.output, case.input.parse::<Claim>().unwrap());
+        }
+    }
+
+    #[test]
+    fn test_claim_parse_error() {
+        let cases: Vec<String> = vec![
+            String::from("@ 3,2: 5x4"),
+            String::from("#123 3,2: 5x4"),
+            String::from("#123 @ 5x4"),
+            String::from("#123 @ 3, 5x4"),
+            String::from("#123 @ ,2 5x4"),
+            String::from("#123 @ 3 5x4"),
+            String::from("#123 @ 3,2"),
+            String::from("#123 @ 3,2 5x"),
+            String::from("#123 @ 3,2 x4"),
+            String::from("#123 @ 3,2 5"),
+        ];
+
+        for ref case in &cases[..] {
+            assert!(case.parse::<Claim>().is_err());
         }
     }
 
