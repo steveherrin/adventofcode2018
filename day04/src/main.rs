@@ -21,15 +21,18 @@ fn main() {
         .split('\n')
         .map(|s| s.parse::<GuardRecord>())
         .filter(|x| x.is_ok())
-        .map(|x| x.unwrap())  // I feel like there should be an idiom for this and the line above
+        .map(|x| x.unwrap()) // I feel like there should be an idiom for this and the line above
         .collect();
 
     let naps = collect_naps(&records);
 
     if task == "sleepiest" {
         let guard = sleepiest_guard(&naps);
-        let minutes = most_asleep(guard, &naps);
-        println!("{} * {} = {}", guard, minutes, guard * minutes);
+        let minute = most_asleep(guard, &naps);
+        println!("{} * {} = {}", guard, minute, guard * minute);
+    } else if task == "predictable" {
+        let (guard, minute) = most_predictable(&naps);
+        println!("{} * {} = {}", guard, minute, guard * minute);
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -99,8 +102,7 @@ impl FromStr for GuardRecord {
                 // assume first number starting with '#' is the guard number
                 let n = s
                     .split_whitespace()
-                    .filter(|&x| x.starts_with('#'))
-                    .next()
+                    .find(|&x| x.starts_with('#'))
                     .unwrap_or("")
                     .trim_left_matches('#')
                     .parse::<u32>()?;
@@ -141,8 +143,12 @@ fn collect_naps(records: &[GuardRecord]) -> Vec<Nap> {
                 if start.time().hour() != end.time().hour() {
                     panic!("Multiple hours are involved");
                 }
-                naps.push(Nap { guard, start: start.time().minute(), end: end.time().minute() });
-            },
+                naps.push(Nap {
+                    guard,
+                    start: start.time().minute(),
+                    end: end.time().minute(),
+                });
+            }
         }
     }
     naps
@@ -153,9 +159,12 @@ fn sleepiest_guard(naps: &[Nap]) -> u32 {
     let mut guard_naptime: HashMap<u32, u64> = HashMap::new();
     for nap in naps {
         let t = guard_naptime.entry(nap.guard).or_insert(0);
-        *t += (nap.end - nap.start) as u64;
+        *t += u64::from(nap.end - nap.start);
     }
-    let (sleepiest_guard, _) = guard_naptime.iter().max_by_key(|(&_guard, &time)| time).unwrap();
+    let (sleepiest_guard, _) = guard_naptime
+        .iter()
+        .max_by_key(|(&_guard, &time)| time)
+        .unwrap();
     sleepiest_guard.to_owned()
 }
 
@@ -167,15 +176,33 @@ fn most_asleep(guard: u32, naps: &[Nap]) -> u32 {
             minutes[min as usize] += 1
         }
     }
-    let (min, _) = minutes.iter().enumerate().max_by_key(|&(_min, t)| t).unwrap();
+    let (min, _) = minutes
+        .iter()
+        .enumerate()
+        .max_by_key(|&(_min, t)| t)
+        .unwrap();
     min as u32
+}
+
+fn most_predictable(naps: &[Nap]) -> (u32, u32) {
+    /// Given a bunch of naps, return the tuple (guard, minute)
+    /// for the guard most frequently asleep at that minute
+    let mut guard_minute: HashMap<(u32, u32), u64> = HashMap::new();
+    for nap in naps {
+        for min in nap.start..nap.end {
+            let t = guard_minute.entry((nap.guard, min)).or_insert(0);
+            *t += 1
+        }
+    }
+    let ((guard, minute), _) = guard_minute.iter().max_by_key(|(&_gm, &t)| t).unwrap();
+    (guard.to_owned(), minute.to_owned())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use chrono::{NaiveDate};
+    use chrono::NaiveDate;
 
     #[test]
     fn test_record_parse() {
@@ -229,93 +256,114 @@ mod tests {
             output: Vec<Nap>,
         }
 
-        let cases: Vec<TestCase> = vec![
-            TestCase {
-                input: vec![
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 55, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 46, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 29, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 2).and_hms(0, 50, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 55, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 25, 0),
-                        event: GuardEvent::WakeUp,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 5, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 30, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 2).and_hms(0, 40, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 24, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 36, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 45, 0),
-                        event: GuardEvent::FallAsleep,
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 3, 0),
-                        event: GuardEvent::StartShift(99),
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 2, 0),
-                        event: GuardEvent::StartShift(99),
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 5, 0),
-                        event: GuardEvent::StartShift(10),
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(23, 58, 0),
-                        event: GuardEvent::StartShift(99),
-                    },
-                    GuardRecord {
-                        timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 0, 0),
-                        event: GuardEvent::StartShift(10),
-                    },
-                ],
-                output: vec![
-                    Nap { guard: 10, start: 5, end: 25 },
-                    Nap { guard: 10, start: 30, end: 55 },
-                    Nap { guard: 99, start: 40, end: 50 },
-                    Nap { guard: 10, start: 24, end: 29 },
-                    Nap { guard: 99, start: 36, end: 46 },
-                    Nap { guard: 99, start: 45, end: 55 },
-                ],
-            },
-        ];
+        let cases: Vec<TestCase> = vec![TestCase {
+            input: vec![
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 55, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 46, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 29, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 2).and_hms(0, 50, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 55, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 25, 0),
+                    event: GuardEvent::WakeUp,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 5, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 30, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 2).and_hms(0, 40, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 24, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 36, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 45, 0),
+                    event: GuardEvent::FallAsleep,
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 5).and_hms(0, 3, 0),
+                    event: GuardEvent::StartShift(99),
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 4).and_hms(0, 2, 0),
+                    event: GuardEvent::StartShift(99),
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 3).and_hms(0, 5, 0),
+                    event: GuardEvent::StartShift(10),
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(23, 58, 0),
+                    event: GuardEvent::StartShift(99),
+                },
+                GuardRecord {
+                    timestamp: NaiveDate::from_ymd(1518, 11, 1).and_hms(0, 0, 0),
+                    event: GuardEvent::StartShift(10),
+                },
+            ],
+            output: vec![
+                Nap {
+                    guard: 10,
+                    start: 5,
+                    end: 25,
+                },
+                Nap {
+                    guard: 10,
+                    start: 30,
+                    end: 55,
+                },
+                Nap {
+                    guard: 99,
+                    start: 40,
+                    end: 50,
+                },
+                Nap {
+                    guard: 10,
+                    start: 24,
+                    end: 29,
+                },
+                Nap {
+                    guard: 99,
+                    start: 36,
+                    end: 46,
+                },
+                Nap {
+                    guard: 99,
+                    start: 45,
+                    end: 55,
+                },
+            ],
+        }];
         for ref case in &cases[..] {
             assert_eq!(case.output, collect_naps(&case.input));
         }
     }
-
 
     #[test]
     fn test_sleepiest_guard() {
@@ -326,21 +374,47 @@ mod tests {
 
         let cases: Vec<TestCase> = vec![
             TestCase {
-                input : vec![
-                    Nap { guard: 10, start: 0, end: 30 },
-                ],
+                input: vec![Nap {
+                    guard: 10,
+                    start: 0,
+                    end: 30,
+                }],
                 output: 10,
             },
             TestCase {
                 input: vec![
-                    Nap { guard: 10, start: 5, end: 25 },
-                    Nap { guard: 10, start: 30, end: 55 },
-                    Nap { guard: 99, start: 40, end: 50 },
-                    Nap { guard: 10, start: 24, end: 29 },
-                    Nap { guard: 99, start: 36, end: 46 },
-                    Nap { guard: 99, start: 45, end: 55 },
+                    Nap {
+                        guard: 10,
+                        start: 5,
+                        end: 25,
+                    },
+                    Nap {
+                        guard: 10,
+                        start: 30,
+                        end: 55,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 40,
+                        end: 50,
+                    },
+                    Nap {
+                        guard: 10,
+                        start: 24,
+                        end: 29,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 36,
+                        end: 46,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 45,
+                        end: 55,
+                    },
                 ],
-                output: 10
+                output: 10,
             },
         ];
 
@@ -358,27 +432,107 @@ mod tests {
 
         let cases: Vec<TestCase> = vec![
             TestCase {
-                input : vec![
-                    Nap { guard: 10, start: 0, end: 31 },
-                    Nap { guard: 10, start: 30, end: 32 },
+                input: vec![
+                    Nap {
+                        guard: 10,
+                        start: 0,
+                        end: 31,
+                    },
+                    Nap {
+                        guard: 10,
+                        start: 30,
+                        end: 32,
+                    },
                 ],
                 output: 30,
             },
             TestCase {
                 input: vec![
-                    Nap { guard: 10, start: 5, end: 25 },
-                    Nap { guard: 10, start: 30, end: 55 },
-                    Nap { guard: 99, start: 40, end: 50 },
-                    Nap { guard: 10, start: 24, end: 29 },
-                    Nap { guard: 99, start: 36, end: 46 },
-                    Nap { guard: 99, start: 45, end: 55 },
+                    Nap {
+                        guard: 10,
+                        start: 5,
+                        end: 25,
+                    },
+                    Nap {
+                        guard: 10,
+                        start: 30,
+                        end: 55,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 40,
+                        end: 50,
+                    },
+                    Nap {
+                        guard: 10,
+                        start: 24,
+                        end: 29,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 36,
+                        end: 46,
+                    },
+                    Nap {
+                        guard: 99,
+                        start: 45,
+                        end: 55,
+                    },
                 ],
-                output: 24
+                output: 24,
             },
         ];
 
         for ref case in &cases[..] {
             assert_eq!(case.output, most_asleep(10, &case.input));
+        }
+    }
+
+    #[test]
+    fn test_most_predictable() {
+        struct TestCase {
+            input: Vec<Nap>,
+            output: (u32, u32),
+        }
+
+        let cases: Vec<TestCase> = vec![TestCase {
+            input: vec![
+                Nap {
+                    guard: 10,
+                    start: 5,
+                    end: 25,
+                },
+                Nap {
+                    guard: 10,
+                    start: 30,
+                    end: 55,
+                },
+                Nap {
+                    guard: 99,
+                    start: 40,
+                    end: 50,
+                },
+                Nap {
+                    guard: 10,
+                    start: 24,
+                    end: 29,
+                },
+                Nap {
+                    guard: 99,
+                    start: 36,
+                    end: 46,
+                },
+                Nap {
+                    guard: 99,
+                    start: 45,
+                    end: 55,
+                },
+            ],
+            output: (99, 45),
+        }];
+
+        for ref case in &cases[..] {
+            assert_eq!(case.output, most_predictable(&case.input));
         }
     }
 }
