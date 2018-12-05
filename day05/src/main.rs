@@ -27,41 +27,32 @@ fn main() {
 }
 
 fn react(s_orig: &str) -> String {
-    let mut reacted = true;
-    let mut s = String::from(s_orig.trim());
-    while reacted {
-        reacted = false;
-        let mut s_new: Vec<char> = Vec::new();
-
-        s = {
-            let mut chars = s.chars();
-            let mut maybe_a = chars.next();
-            loop {
-                if maybe_a.is_none() {
-                    break;
-                }
-                let a = maybe_a.unwrap();
-
-                let maybe_b = chars.next();
-                if maybe_b.is_none() {
-                    // out of letters; nothing for a to react with
-                    s_new.push(a);
-                    break;
-                } else {
-                    let b = maybe_b.unwrap();
-                    if a != b && (a.to_ascii_lowercase() == b || a.to_ascii_uppercase() == b) {
-                        reacted = true;
-                        maybe_a = chars.next();
-                    } else {
-                        s_new.push(a);
-                        maybe_a = maybe_b;
-                    }
-                }
+    // Keep 2 stacks, one with the original string and one initially empty.
+    // Compare the tops of the stacks. If they react, throw away both elements.
+    // If they don't react, move the element from the original string onto
+    // the new stack, and then repeat, until the original stack is exhausted
+    let mut old: Vec<char> = s_orig.chars().collect();
+    let mut new: Vec<char> = Vec::new();
+    old.reverse(); // we want to pop from the start of the original
+    while !old.is_empty() {
+        match (old.pop(), new.pop()) {
+            (None, None) => {}
+            (None, Some(_n)) => {} // we've exhausted the original string
+            (Some(o), None) => {
+                new.push(o); // move the top of the original to the new stack
             }
-            s_new.iter().collect::<String>()
+            (Some(o), Some(n)) => {
+                // compare the tops of the stacks
+                if !(o != n && (o.to_ascii_lowercase() == n || o.to_ascii_uppercase() == n)) {
+                    // no reaction, so put them both onto the new stack
+                    new.push(n);
+                    new.push(o);
+                }
+                // if they reacted, they're both gone; nothing to push
+            }
         };
     }
-    s
+    new.iter().collect::<String>()
 }
 
 fn remove_unit(undesired: char, polymer: &str) -> String {
