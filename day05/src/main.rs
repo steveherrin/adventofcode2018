@@ -14,6 +14,13 @@ fn main() {
     if task == "react" {
         let reacted = react(&polymer);
         println!("{} down to {}", polymer.len(), reacted.len());
+    } else if task == "improve" {
+        let (unit, improved) = best_removal(&polymer);
+        println!(
+            "Remove '{}' and it reduces down to {}",
+            unit,
+            improved.len()
+        );
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -57,6 +64,34 @@ fn react(s_orig: &str) -> String {
     s
 }
 
+fn remove_unit(undesired: char, polymer: &str) -> String {
+    let und_lo = undesired.to_ascii_lowercase();
+    let und_up = undesired.to_ascii_uppercase();
+    polymer
+        .chars()
+        .filter(|&c| c != und_lo && c != und_up)
+        .collect::<String>()
+}
+
+fn best_removal(polymer: &str) -> (char, String) {
+    let mut units: Vec<char> = polymer.to_lowercase().chars().collect();
+    units.sort();
+    units.dedup();
+
+    let mut best_unit: char = ' ';
+    let mut best_reacted = String::from(polymer);
+
+    for unit in units {
+        let removed = remove_unit(unit, polymer);
+        let reacted = react(&removed);
+        if reacted.len() < best_reacted.len() {
+            best_unit = unit;
+            best_reacted = reacted;
+        }
+    }
+    (best_unit, best_reacted)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,6 +128,56 @@ mod tests {
 
         for ref case in &cases[..] {
             assert_eq!(case.output, react(&case.input));
+        }
+    }
+
+    #[test]
+    fn test_remove_unit() {
+        struct TestCase {
+            input: char,
+            output: String,
+        }
+
+        let polymer = "dabAcCaCBAcCcaDA";
+
+        let cases: Vec<TestCase> = vec![
+            TestCase {
+                input: 'a',
+                output: String::from("dbcCCBcCcD"),
+            },
+            TestCase {
+                input: 'b',
+                output: String::from("daAcCaCAcCcaDA"),
+            },
+            TestCase {
+                input: 'c',
+                output: String::from("dabAaBAaDA"),
+            },
+            TestCase {
+                input: 'd',
+                output: String::from("abAcCaCBAcCcaA"),
+            },
+        ];
+
+        for ref case in &cases[..] {
+            assert_eq!(case.output, remove_unit(case.input, polymer));
+        }
+    }
+
+    #[test]
+    fn test_best_removal() {
+        struct TestCase {
+            input: String,
+            output: (char, String),
+        }
+
+        let cases: Vec<TestCase> = vec![TestCase {
+            input: String::from("dabAcCaCBAcCcaDA"),
+            output: ('c', String::from("daDA")),
+        }];
+
+        for ref case in &cases[..] {
+            assert_eq!(case.output, best_removal(&case.input));
         }
     }
 }
