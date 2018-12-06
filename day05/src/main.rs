@@ -27,6 +27,7 @@ fn main() {
 }
 
 fn react(s_orig: &str) -> String {
+    /// "react" the polymer represented by the string, removing opposite polarity pairs
     // Keep 2 stacks, one with the original string and one initially empty.
     // Compare the tops of the stacks. If they react, throw away both elements.
     // If they don't react, move the element from the original string onto
@@ -56,6 +57,7 @@ fn react(s_orig: &str) -> String {
 }
 
 fn remove_unit(undesired: char, polymer: &str) -> String {
+    /// remove all units matching the undesired one (upper or lowercase) from the polymer
     let und_lo = undesired.to_ascii_lowercase();
     let und_up = undesired.to_ascii_uppercase();
     polymer
@@ -65,6 +67,7 @@ fn remove_unit(undesired: char, polymer: &str) -> String {
 }
 
 fn best_removal(polymer: &str) -> (char, String) {
+    /// Determine which unit we can remove from the polymer to get it as short as possible
     let mut units: Vec<char> = polymer.to_lowercase().chars().collect();
     units.sort();
     units.dedup();
