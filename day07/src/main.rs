@@ -1,83 +1,93 @@
 #![allow(unused_doc_comments)]
 use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::env;
 use std::fs;
-
+use std::iter::FromIterator;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
     let filename = &args[2];
 
-    let edges: Vec<Edge> = fs::read_to_string(filename)
+    let dependencies: Vec<Dependency> = fs::read_to_string(filename)
         .unwrap()
         .split('\n')
-        .map(|x| read_step(x))
+        .filter(|l| !l.is_empty())
+        .map(|l| Dependency::from_str(l))
         .collect();
-    let nodes: HashSet<char> = edges
+    let steps: HashSet<char> = dependencies
         .iter()
-        .flat_map(|e| vec![e.first, e.second])
+        .flat_map(|d| vec![d.first, d.second])
         .collect();
 
-    if task == "foo" {
-        println!("bar");
+    if task == "sort" {
+        println!(
+            "{}",
+            topological_sort(&steps, &dependencies)
+                .iter()
+                .collect::<String>()
+        );
     } else {
         panic!("Don't know how to '{}'", task);
     }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
-struct Edge {
+struct Dependency {
     first: char,
     second: char,
 }
 
-impl Edge {
-    fn new(first: char, second: char) -> Edge {
-        Edge { first, second }
+impl Dependency {
+    fn new(first: char, second: char) -> Dependency {
+        Dependency { first, second }
+    }
+
+    fn from_str(dependency: &str) -> Dependency {
+        // assumes step reads "Step A must be finished before step B can begin."
+        let chars: Vec<char> = dependency.chars().collect();
+        let first = chars[5];
+        let second = chars[36];
+        Dependency::new(first, second)
     }
 }
 
-fn read_step(step: &str) -> Edge {
-    // assumes step reads "Step A must be finished before step B can begin."
-    let chars: Vec<char> = step.chars().collect();
-    let first = chars[5];
-    let second = chars[36];
-    Edge::new(first, second)
-}
-
-fn topological_sort(nodes: HashSet<char>, edges: &[Edge]) -> Vec<char> {
+fn topological_sort(nodes: &HashSet<char>, dependencies: &[Dependency]) -> Vec<char> {
     // Kahn's Algorithm
     let mut sorted: Vec<char> = Vec::new();
-    let mut start_nodes: HashSet<char> = nodes.clone();
-    let mut remaining_edges: HashSet<Edge> = HashSet::from_iter(edges.iter().cloned());
+    let mut remaining_deps: HashSet<Dependency> = HashSet::from_iter(dependencies.iter().cloned());
 
-    for edge in edges {
-        start_nodes.remove(&edge.second);
-    }
+    loop {
+        let mut start_nodes: HashSet<char> = nodes.clone();
+        for edge in &remaining_deps {
+            start_nodes.remove(&edge.second);
+        }
+        for used_node in &sorted {
+            start_nodes.remove(&used_node);
+        }
 
-    while !start_nodes.is_empty() {
-        let node = start_nodes.iter().next().unwrap().clone();
+        let node = *start_nodes.iter().min().unwrap();
         start_nodes.remove(&node);
-
         sorted.push(node);
 
-        let edges_to_check: Vec<Edge> = remaining_edges.iter().filter(|e| e.first == node).cloned().collect();
-        for edge in edges_to_check {
-            remaining_edges.remove(&edge);
-            let n = edge.second;
-            if !remaining_edges.iter().any(|e| n == e.second) {
-                start_nodes.insert(n);
-            }
+        let deps_satisfied: Vec<Dependency> = remaining_deps
+            .iter()
+            .filter(|e| e.first == node)
+            .cloned()
+            .collect();
+        for edge in deps_satisfied {
+            remaining_deps.remove(&edge);
+        }
+
+        if sorted.len() == nodes.len() {
+            break;
         }
     }
-    if !remaining_edges.is_empty() {
+    if !remaining_deps.is_empty() {
         panic!("circular dependency");
     }
     sorted
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -87,22 +97,61 @@ mod tests {
     fn test_parse() {
         struct TestCase {
             input: String,
-            output: Edge,
+            output: Dependency,
         }
 
         let cases: Vec<TestCase> = vec![
             TestCase {
                 input: String::from("Step A must be finished before step B can begin."),
-                output: Edge::new('A', 'B'),
+                output: Dependency::new('A', 'B'),
             },
             TestCase {
                 input: String::from("Step D must be finished before step Z can begin."),
-                output: Edge::new('D', 'Z'),
+                output: Dependency::new('D', 'Z'),
             },
         ];
 
         for ref case in &cases[..] {
-            assert_eq!(case.output, read_step(&case.input));
+            assert_eq!(case.output, Dependency::from_str(&case.input));
+        }
+    }
+
+    #[test]
+    fn test_topo_sort() {
+        struct TestCase {
+            nodes: HashSet<char>,
+            edges: Vec<Dependency>,
+            output: Vec<char>,
+        }
+
+        let cases: Vec<TestCase> = vec![
+            TestCase {
+                nodes: HashSet::from_iter(['A', 'B', 'C'].iter().cloned()),
+                edges: vec![Dependency::new('A', 'C'), Dependency::new('C', 'B')],
+                output: vec!['A', 'C', 'B'],
+            },
+            TestCase {
+                nodes: HashSet::from_iter(['A', 'B', 'C'].iter().cloned()),
+                edges: vec![Dependency::new('A', 'C'), Dependency::new('A', 'B')],
+                output: vec!['A', 'B', 'C'],
+            },
+            TestCase {
+                nodes: HashSet::from_iter(['A', 'B', 'C', 'D', 'E', 'F'].iter().cloned()),
+                edges: vec![
+                    Dependency::new('C', 'A'),
+                    Dependency::new('C', 'F'),
+                    Dependency::new('A', 'B'),
+                    Dependency::new('A', 'D'),
+                    Dependency::new('B', 'E'),
+                    Dependency::new('D', 'E'),
+                    Dependency::new('F', 'E'),
+                ],
+                output: vec!['C', 'A', 'B', 'D', 'F', 'E'],
+            },
+        ];
+
+        for case in cases {
+            assert_eq!(case.output, topological_sort(&case.nodes, &case.edges));
         }
     }
 }
