@@ -1,7 +1,11 @@
 #![allow(unused_doc_comments)]
 
+extern crate doubly;
+
 use std::env;
 use std::fmt;
+
+use doubly::DoublyLinkedList;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -9,32 +13,30 @@ fn main() {
 
     if task == "highscore" {
         let n_players = args[2].parse::<usize>().unwrap();
-        let last_marble = args[3].parse::<u32>().unwrap();
+        let last_marble = args[3].parse::<u64>().unwrap();
         println!("{}", high_score(n_players, last_marble));
     } else {
         panic!("Don't know how to '{}'", task);
     }
 }
 
-#[derive(Debug)]
 struct GameBoard {
-    board: Vec<u32>,
+    board: DoublyLinkedList<u64>,
     current: usize,
 }
 
 impl GameBoard {
     fn new() -> GameBoard {
-        GameBoard {
-            board: vec![0],
-            current: 0,
-        }
+        let mut board = DoublyLinkedList::new();
+        board.push_back(0);
+        GameBoard { board, current: 0 }
     }
 
-    fn insert(&mut self, value: u32) {
+    fn insert(&mut self, value: u64) {
         let size = self.board.len();
         let insert_at = (self.current + 2) % size;
         if insert_at == 0 {
-            self.board.push(value);
+            self.board.push_back(value);
             self.current = size;
         } else {
             self.board.insert(insert_at, value);
@@ -42,7 +44,7 @@ impl GameBoard {
         }
     }
 
-    fn remove(&mut self) -> u32 {
+    fn remove(&mut self) -> u64 {
         let size = self.board.len();
         let remove_at = (self.current + size - 7) % size;
         self.current = remove_at;
@@ -63,17 +65,18 @@ impl fmt::Display for GameBoard {
     }
 }
 
-fn high_score(n_players: usize, last_marble: u32) -> u32 {
+fn high_score(n_players: usize, last_marble: u64) -> u64 {
     let mut board = GameBoard::new();
-    let mut scores: Vec<u32> = vec![0; n_players];
+    let mut scores: Vec<u64> = vec![0; n_players];
 
     let mut player: usize = 0;
     for marble in 1..=last_marble {
         if marble % 23 != 0 {
             board.insert(marble);
         } else {
+            let thing = board.remove();
             scores[player] += marble;
-            scores[player] += board.remove();
+            scores[player] += thing;
         }
         player = (player + 1) % n_players;
     }
@@ -88,8 +91,8 @@ mod tests {
     fn test_high_score() {
         struct TestCase {
             n_players: usize,
-            last_marble: u32,
-            output: u32,
+            last_marble: u64,
+            output: u64,
         }
 
         let cases: Vec<TestCase> = vec![
