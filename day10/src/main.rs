@@ -51,7 +51,8 @@ fn main() {
             }
         }
         let message = sky.to_str(best_t);
-        println!("{}", message)
+        println!("{}", message);
+        println!("at t={}", best_t);
     } else {
         panic!("Don't know how to '{}'", task);
     }
