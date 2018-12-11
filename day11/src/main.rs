@@ -6,10 +6,14 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
 
-    if task == "bestsquare" {
+    if task == "best3" {
         let serial = args[2].parse::<u64>().unwrap();
-        let (x, y) = best_square(serial);
+        let (x, y) = best_3_square(serial);
         println!("{},{}", x, y);
+    } else if task == "bestn" {
+        let serial = args[2].parse::<u64>().unwrap();
+        let (x, y, d) = best_square(serial);
+        println!("{},{},{}", x, y, d);
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -32,10 +36,10 @@ impl Board {
         Board { cells }
     }
 
-    fn power_in_square(&self, x: usize, y: usize) -> i64 {
+    fn power_in_square(&self, x: usize, y: usize, d: usize) -> i64 {
         let mut sum: i64 = 0;
-        for i in x..(x + 3) {
-            for j in y..(y + 3) {
+        for i in x..(x + d) {
+            for j in y..(y + d) {
                 let idx = (i - 1) + BOARD_X * (j - 1);
                 let p = self.cells[idx];
                 sum += p;
@@ -53,7 +57,7 @@ fn power_level(x: usize, y: usize, serial: u64) -> i64 {
     (power_level as i64) - 5
 }
 
-fn best_square(serial: u64) -> (usize, usize) {
+fn best_3_square(serial: u64) -> (usize, usize) {
     let board = Board::new(serial);
     let mut best_x: usize = 0;
     let mut best_y: usize = 0;
@@ -61,7 +65,7 @@ fn best_square(serial: u64) -> (usize, usize) {
 
     for x in 1..=(BOARD_X - 3) {
         for y in 1..=(BOARD_Y - 3) {
-            let power = board.power_in_square(x, y);
+            let power = board.power_in_square(x, y, 3);
             if power > max_power {
                 best_x = x;
                 best_y = y;
@@ -70,6 +74,30 @@ fn best_square(serial: u64) -> (usize, usize) {
         }
     }
     (best_x, best_y)
+}
+
+fn best_square(serial: u64) -> (usize, usize, usize) {
+    let board = Board::new(serial);
+    let mut best_d: usize = 0;
+    let mut best_x: usize = 0;
+    let mut best_y: usize = 0;
+    let mut max_power: i64 = 0;
+
+
+    for d in 1..=BOARD_X {
+        for x in 1..=(BOARD_X - d + 1) {
+            for y in 1..=(BOARD_Y - d + 1) {
+                let power = board.power_in_square(x, y, d);
+                if power > max_power {
+                    best_d = d;
+                    best_x = x;
+                    best_y = y;
+                    max_power = power;
+                }
+            }
+        }
+    }
+    (best_x, best_y, best_d)
 }
 
 #[cfg(test)]
@@ -143,7 +171,7 @@ mod tests {
 
         for ref case in cases {
             let board = Board::new(case.serial);
-            assert_eq!(case.output, board.power_in_square(case.x, case.y));
+            assert_eq!(case.output, board.power_in_square(case.x, case.y, 3));
         }
     }
 }
