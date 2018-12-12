@@ -44,10 +44,29 @@ fn main() {
             row.tick();
         }
         println!("{}", row.sum_of_plants());
-    } else if task == "pattern" {
-        for i in 0..(1000 as u64){
-            if i % 100 == 0 {
-                println!("{}: {}", i, row.sum_of_plants());
+    } else if task == "longsum" {
+        // Hope the sum is increasing linearly over an
+        // interval that evenly divides 50 billion.
+        // Empirically, it seems to do it when I
+        // run it, so I can solve the problem that way.
+        // I need to think about if there's a proof this
+        // has to happen, or if there are critria on the
+        // rules, or what.
+        let mut last_diff = 1;
+        let mut last_sum = row.sum_of_plants();
+        for i in 0..1000 {
+            let skip = 100;
+            if i % skip == 0 {
+                let sum = row.sum_of_plants();
+                let diff = sum - last_sum;
+                if diff != last_diff {
+                    last_diff = diff;
+                    last_sum = sum;
+                } else {
+                    let extrapolation = sum + diff / skip * (50_000_000_000 - i);
+                    println!("{}", extrapolation);
+                    break;
+                }
             }
             row.tick();
         }
@@ -110,14 +129,10 @@ fn parse_char(c: char) -> Pot {
 }
 
 fn parse_str(s: &str) -> Vec<Pot> {
-    s.trim()
-        .chars()
-        .map(|c| parse_char(c))
-        .collect()
+    s.trim().chars().map(parse_char).collect()
 }
 
 mod tests {
-    use super::*;
     #[test]
     fn test_sum_of_plants() {
         struct TestCase {
