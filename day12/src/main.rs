@@ -4,8 +4,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
 
-static SIZE: usize = 2048;
-static OFFSET: usize = 1024;
+static SIZE: usize = 32768;
+static OFFSET: usize = 16384;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -44,6 +44,13 @@ fn main() {
             row.tick();
         }
         println!("{}", row.sum_of_plants());
+    } else if task == "pattern" {
+        for i in 0..(1000 as u64){
+            if i % 100 == 0 {
+                println!("{}: {}", i, row.sum_of_plants());
+            }
+            row.tick();
+        }
     } else {
         panic!("Don't know how to '{}'", task);
     }
