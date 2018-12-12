@@ -53,6 +53,20 @@ impl Row {
     }
 }
 
+fn parse_char(c: char) -> Pot {
+    match c {
+        '#' => Pot::Plant,
+        _ => Pot::None,
+    }
+}
+
+fn parse_str(s: &str) -> Vec<Pot> {
+    s.trim()
+        .chars()
+        .map(|c| parse_char(c))
+        .collect()
+}
+
 mod tests {
     use super::*;
     #[test]
@@ -85,6 +99,33 @@ mod tests {
             let rules: HashMap<[Pot; 5], Pot> = HashMap::new();
             let row = Row::new(&case.state, rules);
             assert_eq!(case.expected, row.sum_of_plants());
+        }
+    }
+
+    #[test]
+    fn test_parse_str() {
+        struct TestCase {
+            input: String,
+            output: Vec<Pot>,
+        }
+
+        let cases = vec![
+            TestCase {
+                input: String::from("#.#"),
+                output: vec![Pot::Plant, Pot::None, Pot::Plant],
+            },
+            TestCase {
+                input: String::from(" ..#\n"),
+                output: vec![Pot::None, Pot::None, Pot::Plant],
+            },
+            TestCase {
+                input: String::from(""),
+                output: vec![],
+            },
+        ];
+
+        for case in cases {
+            assert_eq!(case.output, parse_str(&case.input));
         }
     }
 
