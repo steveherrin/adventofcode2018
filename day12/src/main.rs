@@ -1,11 +1,53 @@
 use std::collections::HashMap;
+use std::env;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+
+static SIZE: usize = 2048;
+static OFFSET: usize = 1024;
 
 fn main() {
-    println!("Hello, world!");
-}
+    let args: Vec<String> = env::args().collect();
+    let task = &args[1];
+    let filename = &args[2];
 
-static SIZE: usize = 29;
-static OFFSET: usize = 2;
+    let f = File::open(filename).unwrap();
+    let mut reader = BufReader::new(f);
+    let mut line = String::new();
+
+    reader.read_line(&mut line).expect("Problem reading file");
+    let parts: Vec<&str> = line.split(": ").collect();
+    let state = parse_str(parts[1]);
+
+    let mut rules: HashMap<[Pot; 5], Pot> = HashMap::new();
+    for mut rule_line in reader.lines() {
+        let rl = rule_line.unwrap();
+        if rl.trim().is_empty() {
+            continue;
+        }
+        let parts: Vec<&str> = rl.trim().split(" => ").collect();
+        let rule_str = parts[0];
+        let mut key = [Pot::None; 5];
+        assert!(rule_str.len() == 5);
+        for (i, c) in rule_str.chars().enumerate() {
+            key[i] = parse_char(c);
+        }
+        let value = parse_str(parts[1].trim())[0];
+
+        rules.insert(key, value);
+    }
+
+    let mut row = Row::new(&state, rules);
+    if task == "sum" {
+        for _ in 0..20 {
+            row.tick();
+        }
+        println!("{}", row.sum_of_plants());
+    } else {
+        panic!("Don't know how to '{}'", task);
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 enum Pot {
