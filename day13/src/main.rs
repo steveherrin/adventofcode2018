@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::env;
 use std::fs::File;
@@ -11,7 +12,8 @@ fn main() {
 
     let mut file = File::open(filename).expect("Couldn't open file");
     let mut contents = String::new();
-    file.read_to_string(&mut contents).expect("Couldn't read from file");
+    file.read_to_string(&mut contents)
+        .expect("Couldn't read from file");
 
     let (mut tracks, mut carts) = parse_tracks(&contents);
 
@@ -21,11 +23,22 @@ fn main() {
             let r = tracks.tick(&carts);
             t += 1;
             match r {
-                TickResult::Success(new_carts) => { carts = new_carts },
+                TickResult::Success(new_carts) => carts = new_carts,
                 TickResult::Collision((x, y)) => {
                     println!("Collision at t={}, at {},{}", t, x, y);
                     break;
                 }
+            }
+        }
+    } else if task == "annihilate" {
+        let mut t = 0u64;
+        loop {
+            carts = tracks.tick_annihilate(&carts);
+            t += 1;
+            if carts.len() == 1 {
+                let cart = &carts[0];
+                println!("After t={}, one cart left at {},{}", t, cart.x, cart.y);
+                break;
             }
         }
     } else {
@@ -37,7 +50,7 @@ fn parse_tracks(s: &str) -> (Tracks, Vec<Cart>) {
     let mut n_carts = 0u32;
     let mut n_x: Option<usize> = None;
     let mut grid: Vec<Track> = Vec::with_capacity(s.len());
-    let mut carts : Vec<Cart> = Vec::new();
+    let mut carts: Vec<Cart> = Vec::new();
 
     let mut x = 0;
     let mut y = 0;
@@ -57,34 +70,40 @@ fn parse_tracks(s: &str) -> (Tracks, Vec<Cart>) {
                 }
                 y += 1;
                 x = 0;
-            },
+            }
             'v' => {
                 grid.push(Track::V);
                 carts.push(Cart::new(n_carts, x, y, Direction::Down));
                 n_carts += 1;
-            },
+            }
             '>' => {
                 grid.push(Track::H);
                 carts.push(Cart::new(n_carts, x, y, Direction::Right));
                 n_carts += 1;
-            },
+            }
             '^' => {
                 grid.push(Track::V);
                 carts.push(Cart::new(n_carts, x, y, Direction::Up));
                 n_carts += 1;
-            },
+            }
             '<' => {
                 grid.push(Track::H);
                 carts.push(Cart::new(n_carts, x, y, Direction::Left));
                 n_carts += 1;
-            },
+            }
             _ => panic!("invalid input character '{}'", c),
         }
         if c != '\n' {
             x += 1;
         }
     }
-    (Tracks { grid, n_x: n_x.unwrap() }, carts)
+    (
+        Tracks {
+            grid,
+            n_x: n_x.unwrap(),
+        },
+        carts,
+    )
 }
 
 // Next step is to read in the tracks from input
@@ -151,7 +170,13 @@ impl PartialOrd for Cart {
 
 impl Cart {
     fn new(id: u32, x: usize, y: usize, d: Direction) -> Cart {
-        Cart { id, x, y, d, next_turn: Turn::Left }
+        Cart {
+            id,
+            x,
+            y,
+            d,
+            next_turn: Turn::Left,
+        }
     }
 
     fn intersection_turn(&mut self) -> Direction {
@@ -216,7 +241,7 @@ impl Tracks {
     }
 
     fn tick(&mut self, carts: &[Cart]) -> TickResult {
-        let mut new_carts: Vec<Cart> = carts.iter().cloned().collect();
+        let mut new_carts: Vec<Cart> = carts.to_vec();
         new_carts.sort();
         let mut carts_at: VecDeque<(usize, usize)> = new_carts.iter().map(|c| (c.x, c.y)).collect();
 
@@ -241,26 +266,38 @@ impl Tracks {
         }
         TickResult::Success(new_carts)
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+    fn tick_annihilate(&mut self, carts: &[Cart]) -> Vec<Cart> {
+        let mut new_carts: Vec<Cart> = carts.to_vec();
+        new_carts.sort();
+        let mut carts_at: VecDeque<(usize, usize, u32)> =
+            new_carts.iter().map(|c| (c.x, c.y, c.id)).collect();
+        let mut carts_to_remove: HashSet<u32> = HashSet::new();
 
-    #[test]
-    fn test_sum_of_plants() {
-        struct TestCase {
-            input: i64,
-            expected: i64,
+        for mut cart in &mut new_carts {
+            let (new_x, new_y) = match cart.d {
+                Direction::Up => (cart.x, cart.y - 1),
+                Direction::Down => (cart.x, cart.y + 1),
+                Direction::Right => (cart.x + 1, cart.y),
+                Direction::Left => (cart.x - 1, cart.y),
+            };
+
+            carts_at.pop_front();
+            for (x, y, id) in &carts_at {
+                if *x == new_x && *y == new_y {
+                    carts_to_remove.insert(*id);
+                    carts_to_remove.insert(cart.id);
+                }
+            }
+            carts_at.push_back((new_x, new_y, cart.id));
+
+            let track = self.at(new_x, new_y);
+            cart.move_to(new_x, new_y, track);
         }
-
-        let cases = vec![TestCase {
-            input: 0,
-            expected: 0,
-        }];
-
-        for case in cases {
-            assert_eq!(case.expected, case.input);
-        }
+        new_carts
+            .iter()
+            .filter(|c| !carts_to_remove.contains(&c.id))
+            .cloned()
+            .collect()
     }
 }
