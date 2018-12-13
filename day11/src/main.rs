@@ -1,5 +1,6 @@
 #![allow(unused_doc_comments)]
 
+use std::collections::HashMap;
 use std::env;
 
 fn main() {
@@ -18,34 +19,47 @@ fn main() {
         panic!("Don't know how to '{}'", task);
     }
 }
-static BOARD_X: usize = 300;
-static BOARD_Y: usize = 300;
+static BOARD_SIZE: usize = 300;
 
 struct Board {
     cells: Vec<i64>,
+    partial_sums: HashMap<(usize, usize, usize), i64>,
 }
 
 impl Board {
     fn new(serial: u64) -> Board {
-        let mut cells: Vec<i64> = vec![0; BOARD_X * BOARD_Y];
-        for i in 0..BOARD_X {
-            for j in 0..BOARD_Y {
-                cells[i + BOARD_X * j] = power_level(i + 1, j + 1, serial);
+        let mut cells: Vec<i64> = vec![0; BOARD_SIZE * BOARD_SIZE];
+        for i in 0..BOARD_SIZE {
+            for j in 0..BOARD_SIZE {
+                cells[i + BOARD_SIZE * j] = power_level(i + 1, j + 1, serial);
             }
         }
-        Board { cells }
+        let partial_sums: HashMap<(usize, usize, usize), i64> = HashMap::new();
+        Board {
+            cells,
+            partial_sums,
+        }
     }
 
-    fn power_in_square(&self, x: usize, y: usize, d: usize) -> i64 {
-        let mut sum: i64 = 0;
-        for i in x..(x + d) {
-            for j in y..(y + d) {
-                let idx = (i - 1) + BOARD_X * (j - 1);
-                let p = self.cells[idx];
-                sum += p;
-            }
+    fn power_in_square(&mut self, x: usize, y: usize, d: usize) -> i64 {
+        if self.partial_sums.contains_key(&(x, y, d)) {
+            self.partial_sums[&(x, y, d)]
+        } else {
+            let sum = match d {
+                0 => 0,
+                1 => self.cells[(x - 1) + BOARD_SIZE * (y - 1)],
+                _ => {
+                    let mut sum = self.power_in_square(x, y, d - 1);
+                    sum += self.power_in_square(x + 1, y + 1, d - 1);
+                    sum -= self.power_in_square(x + 1, y + 1, d - 2);
+                    sum += self.power_in_square(x + d - 1, y, 1);
+                    sum += self.power_in_square(x, y + d - 1, 1);
+                    sum
+                }
+            };
+            self.partial_sums.insert((x, y, d), sum);
+            sum
         }
-        sum
     }
 }
 
@@ -58,13 +72,13 @@ fn power_level(x: usize, y: usize, serial: u64) -> i64 {
 }
 
 fn best_3_square(serial: u64) -> (usize, usize) {
-    let board = Board::new(serial);
+    let mut board = Board::new(serial);
     let mut best_x: usize = 0;
     let mut best_y: usize = 0;
     let mut max_power: i64 = 0;
 
-    for x in 1..=(BOARD_X - 3) {
-        for y in 1..=(BOARD_Y - 3) {
+    for x in 1..=(BOARD_SIZE - 3) {
+        for y in 1..=(BOARD_SIZE - 3) {
             let power = board.power_in_square(x, y, 3);
             if power > max_power {
                 best_x = x;
@@ -77,16 +91,15 @@ fn best_3_square(serial: u64) -> (usize, usize) {
 }
 
 fn best_square(serial: u64) -> (usize, usize, usize) {
-    let board = Board::new(serial);
+    let mut board = Board::new(serial);
     let mut best_d: usize = 0;
     let mut best_x: usize = 0;
     let mut best_y: usize = 0;
     let mut max_power: i64 = 0;
 
-
-    for d in 1..=BOARD_X {
-        for x in 1..=(BOARD_X - d + 1) {
-            for y in 1..=(BOARD_Y - d + 1) {
+    for d in 1..=BOARD_SIZE {
+        for x in 1..=(BOARD_SIZE - d + 1) {
+            for y in 1..=(BOARD_SIZE - d + 1) {
                 let power = board.power_in_square(x, y, d);
                 if power > max_power {
                     best_d = d;
@@ -170,7 +183,7 @@ mod tests {
         ];
 
         for ref case in cases {
-            let board = Board::new(case.serial);
+            let mut board = Board::new(case.serial);
             assert_eq!(case.output, board.power_in_square(case.x, case.y, 3));
         }
     }
