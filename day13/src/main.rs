@@ -1,16 +1,90 @@
 use std::cmp::Ordering;
+use std::collections::VecDeque;
 use std::env;
+use std::fs::File;
+use std::io::prelude::*;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
     let filename = &args[2];
 
-    if task == "a" {
-        println!("do something");
+    let mut file = File::open(filename).expect("Couldn't open file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents).expect("Couldn't read from file");
+
+    let (mut tracks, mut carts) = parse_tracks(&contents);
+
+    if task == "collide" {
+        let mut t = 0u64;
+        loop {
+            let r = tracks.tick(&carts);
+            t += 1;
+            match r {
+                TickResult::Success(new_carts) => { carts = new_carts },
+                TickResult::Collision((x, y)) => {
+                    println!("Collision at t={}, at {},{}", t, x, y);
+                    break;
+                }
+            }
+        }
     } else {
         panic!("Don't know how to '{}'", task);
     }
+}
+
+fn parse_tracks(s: &str) -> (Tracks, Vec<Cart>) {
+    let mut n_carts = 0u32;
+    let mut n_x: Option<usize> = None;
+    let mut grid: Vec<Track> = Vec::with_capacity(s.len());
+    let mut carts : Vec<Cart> = Vec::new();
+
+    let mut x = 0;
+    let mut y = 0;
+    for c in s.chars() {
+        match c {
+            '|' => grid.push(Track::V),
+            '-' => grid.push(Track::H),
+            '/' => grid.push(Track::RC),
+            '\\' => grid.push(Track::LC),
+            '+' => grid.push(Track::I),
+            ' ' => grid.push(Track::N),
+            '\n' => {
+                if n_x.is_none() {
+                    n_x = Some(x);
+                } else {
+                    assert_eq!(n_x.unwrap(), x);
+                }
+                y += 1;
+                x = 0;
+            },
+            'v' => {
+                grid.push(Track::V);
+                carts.push(Cart::new(n_carts, x, y, Direction::Down));
+                n_carts += 1;
+            },
+            '>' => {
+                grid.push(Track::H);
+                carts.push(Cart::new(n_carts, x, y, Direction::Right));
+                n_carts += 1;
+            },
+            '^' => {
+                grid.push(Track::V);
+                carts.push(Cart::new(n_carts, x, y, Direction::Up));
+                n_carts += 1;
+            },
+            '<' => {
+                grid.push(Track::H);
+                carts.push(Cart::new(n_carts, x, y, Direction::Left));
+                n_carts += 1;
+            },
+            _ => panic!("invalid input character '{}'", c),
+        }
+        if c != '\n' {
+            x += 1;
+        }
+    }
+    (Tracks { grid, n_x: n_x.unwrap() }, carts)
 }
 
 // Next step is to read in the tracks from input
@@ -76,6 +150,10 @@ impl PartialOrd for Cart {
 }
 
 impl Cart {
+    fn new(id: u32, x: usize, y: usize, d: Direction) -> Cart {
+        Cart { id, x, y, d, next_turn: Turn::Left }
+    }
+
     fn intersection_turn(&mut self) -> Direction {
         let d = match (&self.next_turn, &self.d) {
             (Turn::Straight, _) => self.d,
@@ -92,14 +170,10 @@ impl Cart {
         let next_turn = match self.next_turn {
             Turn::Left => Turn::Straight,
             Turn::Straight => Turn::Right,
-            Turn::Right => Turn::Straight,
+            Turn::Right => Turn::Left,
         };
         self.next_turn = next_turn;
         d
-    }
-
-    fn crash(&self, other: &Cart) -> bool {
-        self.id != other.id && self.x == other.x && self.y == other.y
     }
 
     fn move_to(&mut self, x: usize, y: usize, track: Track) {
@@ -128,7 +202,6 @@ impl Cart {
 struct Tracks {
     grid: Vec<Track>,
     n_x: usize,
-    n_y: usize,
 }
 
 enum TickResult {
@@ -137,31 +210,34 @@ enum TickResult {
 }
 
 impl Tracks {
-    fn idx(x: usize, y: usize) -> usize {
-        0
-    }
-
     fn at(&self, x: usize, y: usize) -> Track {
-        Track::N
+        let idx = x + y * self.n_x;
+        self.grid[idx]
     }
 
     fn tick(&mut self, carts: &[Cart]) -> TickResult {
         let mut new_carts: Vec<Cart> = carts.iter().cloned().collect();
         new_carts.sort();
+        let mut carts_at: VecDeque<(usize, usize)> = new_carts.iter().map(|c| (c.x, c.y)).collect();
 
         for mut cart in &mut new_carts {
             let (new_x, new_y) = match cart.d {
-                Direction::Up => (cart.x, cart.y + 1),
-                Direction::Down => (cart.x, cart.y - 1),
+                Direction::Up => (cart.x, cart.y - 1),
+                Direction::Down => (cart.x, cart.y + 1),
                 Direction::Right => (cart.x + 1, cart.y),
                 Direction::Left => (cart.x - 1, cart.y),
             };
 
+            carts_at.pop_front();
+            for (x, y) in &carts_at {
+                if *x == new_x && *y == new_y {
+                    return TickResult::Collision((*x, *y));
+                }
+            }
+            carts_at.push_back((new_x, new_y));
+
             let track = self.at(new_x, new_y);
             cart.move_to(new_x, new_y, track);
-            if carts.iter().any(|other| cart.crash(other)) {
-                return TickResult::Collision((new_x, new_y));
-            }
         }
         TickResult::Success(new_carts)
     }
