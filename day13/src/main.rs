@@ -106,12 +106,6 @@ fn parse_tracks(s: &str) -> (Tracks, Vec<Cart>) {
     )
 }
 
-// Next step is to read in the tracks from input
-// Observed that > < are always on horizontal tracks,
-// and ^ v are always on vertical tracks, so can read
-// the input cell by cell
-// Should just need to read it in and run it
-
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 enum Track {
     V,  // vertical line '|'
@@ -283,10 +277,17 @@ impl Tracks {
             };
 
             carts_at.pop_front();
+            let mut already_collided = false;
             for (x, y, id) in &carts_at {
                 if *x == new_x && *y == new_y {
+                    if already_collided {
+                        panic!(
+                            "3 cart collision; first two should annihilate and let the 3rd through"
+                        );
+                    }
                     carts_to_remove.insert(*id);
                     carts_to_remove.insert(cart.id);
+                    already_collided = true;
                 }
             }
             carts_at.push_back((new_x, new_y, cart.id));
