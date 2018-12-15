@@ -4,19 +4,27 @@ use std::fmt;
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
-    let n = &args[2].parse::<usize>().unwrap();
+
+    let initial = Kitchen {
+        scoreboard: vec![3, 7],
+        elf_0_idx: 0,
+        elf_1_idx: 1,
+    };
 
     if task == "tenafter" {
-        let initial = Kitchen {
-            scoreboard: vec![3, 7],
-            elf_0_idx: 0,
-            elf_1_idx: 1,
-        };
+        let n = &args[2].parse::<usize>().unwrap();
         let result = next_10_scores_after(&initial, *n);
         for i in result {
             print!("{}", i);
         }
         println!();
+    } else if task == "before" {
+        let desired: Vec<u8> = args[2]
+            .chars()
+            .map(|c| c.to_digit(10).unwrap() as u8)
+            .collect();
+        let result = recipes_before(&initial, &desired);
+        println!("{}", result);
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -75,6 +83,29 @@ fn next_10_scores_after(initial: &Kitchen, n_recipes: usize) -> Vec<u8> {
         kitchen.cooking_round();
     }
     kitchen.scoreboard[n_recipes..desired_recipes].to_vec()
+}
+
+fn recipes_before(initial: &Kitchen, desired: &[u8]) -> usize {
+    let d_l = desired.len();
+    let mut kitchen = initial.clone();
+    let mut i: u64 = 0;
+    loop {
+        kitchen.cooking_round();
+
+        // we only add at most 2 elements per loop
+        // so check for our desired sequence right at
+        // the end, and one off of the end
+        let l = kitchen.scoreboard.len();
+        if l > d_l && kitchen.scoreboard[(l - d_l)..] == *desired {
+            return l - d_l;
+        } else if l > d_l + 1 && kitchen.scoreboard[(l - d_l - 1)..(l - 1)] == *desired {
+            return l - d_l - 1;
+        }
+        i += 1;
+        if i > 1_000_000_000 {
+            panic!("not terminating");
+        }
+    }
 }
 
 #[cfg(test)]
@@ -188,8 +219,44 @@ mod tests {
         ];
 
         for case in cases {
-            println!("{}: ", case.n_recipes);
             assert_eq!(case.output, next_10_scores_after(&initial, case.n_recipes));
         }
     }
+
+    #[test]
+    fn test_recipes_before() {
+        let initial = Kitchen {
+            scoreboard: vec![3, 7],
+            elf_0_idx: 0,
+            elf_1_idx: 1,
+        };
+        struct TestCase {
+            desired: Vec<u8>,
+            output: usize,
+        }
+
+        let cases = vec![
+            TestCase {
+                desired: vec![5, 1, 5, 8, 9],
+                output: 9,
+            },
+            TestCase {
+                desired: vec![0, 1, 2, 4, 5],
+                output: 5,
+            },
+            TestCase {
+                desired: vec![9, 2, 5, 1, 0],
+                output: 18,
+            },
+            TestCase {
+                desired: vec![5, 9, 4, 1, 4],
+                output: 2018,
+            },
+        ];
+
+        for case in cases {
+            assert_eq!(case.output, recipes_before(&initial, &case.desired));
+        }
+    }
+
 }
