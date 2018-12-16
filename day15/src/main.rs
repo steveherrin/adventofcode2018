@@ -27,13 +27,24 @@ fn main() {
             hp_left,
             n_rounds * (hp_left as u32)
         );
+    } else if task == "savetheelves" {
+        let (n_rounds, hp_left, elf_attack) = save_the_elves(&board);
+        println!("Combat over after t={}", n_rounds);
+        println!("HP left: {}", hp_left);
+        println!("Power Needed: {}", elf_attack);
+        println!(
+            "{} * {} = {}",
+            n_rounds,
+            hp_left,
+            n_rounds * (hp_left as u32)
+        );
     } else {
         panic!("Don't know how to '{}'", task);
     }
 }
 
 static STARTING_HP: i32 = 200;
-static ATTACK_POWER: i32 = 3;
+static DEFAULT_ATTACK_POWER: i32 = 3;
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
 enum Piece {
@@ -78,11 +89,13 @@ impl Piece {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 struct Board {
     grid: Vec<Piece>,
     size_x: usize,
     size_y: usize,
+    elf_attack: i32,
+    goblin_attack: i32,
 }
 
 fn read_board(s: &str) -> Board {
@@ -117,6 +130,8 @@ fn read_board(s: &str) -> Board {
         grid,
         size_x,
         size_y,
+        elf_attack: DEFAULT_ATTACK_POWER,
+        goblin_attack: DEFAULT_ATTACK_POWER,
     }
 }
 
@@ -314,7 +329,7 @@ impl Board {
             let weakest_piece = self.grid[*weakest_loc];
             self.grid[*weakest_loc] = match weakest_piece {
                 Piece::Goblin(hp) => {
-                    let new_hp = hp - ATTACK_POWER;
+                    let new_hp = hp - self.elf_attack;
                     if new_hp <= 0 {
                         Piece::Open
                     } else {
@@ -322,7 +337,7 @@ impl Board {
                     }
                 }
                 Piece::Elf(hp) => {
-                    let new_hp = hp - ATTACK_POWER;
+                    let new_hp = hp - self.goblin_attack;
                     if new_hp <= 0 {
                         Piece::Open
                     } else {
@@ -380,6 +395,25 @@ impl Board {
     }
 }
 
+fn save_the_elves(ref_board: &Board) -> (u32, i32, i32) {
+    /// Find the minimum attack power that will let the elves win without losses
+    let mut attack = 3i32;
+    let elves_start = ref_board.elf_locations().len();
+    loop {
+        let mut board = ref_board.clone();
+        attack += 1; // would be better to do a binary search, but this isn't too slow
+        board.elf_attack = attack;
+        let (n_rounds, hp_left) = board.combat();
+        let elves_left = board.elf_locations().len();
+        if elves_left == elves_start {
+            return (n_rounds, hp_left, attack);
+        }
+        if attack > 1000 {
+            panic!("it's hopeless");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,6 +424,8 @@ mod tests {
             grid: vec![Piece::Open; 35],
             size_x: 7,
             size_y: 5,
+            elf_attack: 0,
+            goblin_attack: 0,
         };
         struct TestCase {
             xy: (usize, usize),
@@ -421,6 +457,8 @@ mod tests {
             grid: vec![Piece::Open; 35],
             size_x: 7,
             size_y: 5,
+            elf_attack: 0,
+            goblin_attack: 0,
         };
         struct TestCase {
             xy0: (usize, usize),
@@ -569,6 +607,8 @@ mod tests {
             ],
             size_x: 5,
             size_y: 5,
+            elf_attack: 3,
+            goblin_attack: 3,
         };
         board.attack_with(12);
         assert!(board.grid[13].is_open());
@@ -668,6 +708,98 @@ mod tests {
 
         for mut case in cases {
             assert_eq!((case.n_rounds, case.hp_left), case.board.combat())
+        }
+    }
+
+    #[test]
+    fn test_save_elves() {
+        struct TestCase {
+            board: Board,
+            n_rounds: u32,
+            hp_left: i32,
+            elf_attack: i32,
+        }
+
+        let cases = vec![
+            TestCase {
+                board: read_board(
+                    "#######\n\
+                     #.G...#\n\
+                     #...EG#\n\
+                     #.#.#G#\n\
+                     #..G#E#\n\
+                     #.....#\n\
+                     #######\n",
+                ),
+                n_rounds: 29,
+                hp_left: 172,
+                elf_attack: 15,
+            },
+            TestCase {
+                board: read_board(
+                    "#######\n\
+                     #E..EG#\n\
+                     #.#G.E#\n\
+                     #E.##E#\n\
+                     #G..#.#\n\
+                     #..E#.#\n\
+                     #######\n",
+                ),
+                n_rounds: 33,
+                hp_left: 948,
+                elf_attack: 4,
+            },
+            TestCase {
+                board: read_board(
+                    "#######\n\
+                     #E.G#.#\n\
+                     #.#G..#\n\
+                     #G.#.G#\n\
+                     #G..#.#\n\
+                     #...E.#\n\
+                     #######\n",
+                ),
+                n_rounds: 37,
+                hp_left: 94,
+                elf_attack: 15,
+            },
+            TestCase {
+                board: read_board(
+                    "#######\n\
+                     #.E...#\n\
+                     #.#..G#\n\
+                     #.###.#\n\
+                     #E#G#G#\n\
+                     #...#G#\n\
+                     #######\n",
+                ),
+                n_rounds: 39,
+                hp_left: 166,
+                elf_attack: 12,
+            },
+            TestCase {
+                board: read_board(
+                    "#########\n\
+                     #G......#\n\
+                     #.E.#...#\n\
+                     #..##..G#\n\
+                     #...##..#\n\
+                     #...#...#\n\
+                     #.G...G.#\n\
+                     #.....G.#\n\
+                     #########\n",
+                ),
+                n_rounds: 30,
+                hp_left: 38,
+                elf_attack: 34,
+            },
+        ];
+
+        for mut case in cases {
+            assert_eq!(
+                (case.n_rounds, case.hp_left, case.elf_attack),
+                save_the_elves(&case.board)
+            )
         }
     }
 }
