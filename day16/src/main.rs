@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -14,12 +15,18 @@ fn main() {
         let mut n_gte_3 = 0;
         let n_tot = observations.len();
         for obs in observations {
-            let n_behaves_like = behaves_like(&obs.instruction, &obs.before, &obs.after);
+            let n_behaves_like = behaves_like(&obs.instruction, &obs.before, &obs.after).len();
             if n_behaves_like >= 3 {
                 n_gte_3 += 1;
             }
         }
         println!("processed {}; {} behave like 3 or more", n_tot, n_gte_3);
+    } else if task == "opcodes" {
+        let observations = read_behavior_input(filename).unwrap_or(vec![]);
+        let pairs = determine_opcodes(&observations);
+        for pair in pairs {
+            println!("{}: {}", pair.0, pair.1);
+        }
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -195,16 +202,51 @@ impl CPU {
     }
 }
 
-fn behaves_like(instruction: &[usize], before: &[usize], after: &[usize]) -> u8 {
-    let mut n_like: u8 = 0;
+fn behaves_like(instruction: &[usize], before: &[usize], after: &[usize]) -> HashSet<usize> {
+    let mut like: HashSet<usize> = HashSet::new();
     for opcode in 0..16 {
         let mut cpu = CPU::new(before[0], before[1], before[2], before[3]);
         cpu.process(opcode, instruction[1], instruction[2], instruction[3]);
         if cpu.registers == [after[0], after[1], after[2], after[3]] {
-            n_like += 1;
+            like.insert(opcode);
         }
     }
-    n_like
+    like
+}
+
+fn determine_opcodes(observations: &[Observation]) -> Vec<(usize, usize)> {
+    let mut allowed: Vec<HashSet<usize>> = vec![HashSet::new(); 16];
+    for their_opcode in 0..16 {
+        for my_opcode in 0..16 {
+            allowed[their_opcode].insert(my_opcode);
+        }
+    }
+    for obs in observations {
+        let like = behaves_like(&obs.instruction, &obs.before, &obs.after);
+        let their_opcode = obs.instruction[0];
+        let new_allowed = allowed[their_opcode].intersection(&like).cloned().collect();
+        allowed[their_opcode] = new_allowed;
+    }
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    let mut did_work = true;
+    while did_work {
+        // go through, find ones with only one possibility,
+        // record it, make sure no others can use that one,
+        // and repeat until we've worked everything out
+        did_work = false;
+        for their_opcode in 0..16 {
+            let n_possible = allowed[their_opcode].len();
+            if n_possible == 1 {
+                let my_opcode = allowed[their_opcode].iter().cloned().next().unwrap();
+                pairs.push((their_opcode, my_opcode));
+                for other_opcode in 0..16 {
+                    did_work |= allowed[other_opcode].remove(&my_opcode);
+                }
+            }
+        }
+    }
+    pairs.sort();
+    pairs
 }
 
 #[cfg(test)]
@@ -324,7 +366,7 @@ mod tests {
         let instruction = [9, 2, 1, 2];
         let before = [3, 2, 1, 1];
         let after = [3, 2, 2, 1];
-        assert_eq!(3, behaves_like(&instruction, &before, &after));
+        assert_eq!(3, behaves_like(&instruction, &before, &after).len());
     }
     #[test]
     fn test_extract_numbers() {
