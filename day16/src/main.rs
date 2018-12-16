@@ -1,15 +1,108 @@
 use std::env;
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::num::ParseIntError;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
     let filename = &args[2];
 
-    if task == "something" {
-        println!("do something");
+    if task == "behaveslike" {
+        let observations = read_behavior_input(filename).unwrap_or(vec![]);
+        let mut n_gte_3 = 0;
+        let n_tot = observations.len();
+        for obs in observations {
+            let n_behaves_like = behaves_like(&obs.instruction, &obs.before, &obs.after);
+            if n_behaves_like >= 3 {
+                n_gte_3 += 1;
+            }
+        }
+        println!("processed {}; {} behave like 3 or more", n_tot, n_gte_3);
     } else {
         panic!("Don't know how to '{}'", task);
     }
+}
+
+#[derive(Debug)]
+struct Observation {
+    instruction: [usize; 4],
+    before: [usize; 4],
+    after: [usize; 4],
+}
+
+impl Observation {
+    fn new(instruction: &[usize], before: &[usize], after: &[usize]) -> Observation {
+        Observation {
+            instruction: [
+                instruction[0],
+                instruction[1],
+                instruction[2],
+                instruction[3],
+            ],
+            before: [before[0], before[1], before[2], before[3]],
+            after: [after[0], after[1], after[2], after[3]],
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ReadError {
+    IO(std::io::Error),
+    Number(ParseIntError),
+    MissingNumbers,
+}
+
+impl From<std::io::Error> for ReadError {
+    fn from(err: std::io::Error) -> ReadError {
+        ReadError::IO(err)
+    }
+}
+
+impl From<ParseIntError> for ReadError {
+    fn from(err: ParseIntError) -> ReadError {
+        ReadError::Number(err)
+    }
+}
+
+fn extract_numbers(line: &str) -> Result<Vec<usize>, std::num::ParseIntError> {
+    let s = line.trim();
+    let lo = s.find('[').map(|i| i + 1).unwrap_or(0);
+    let hi = s.find(']').unwrap_or(s.len());
+    s[lo..hi]
+        .split(' ')
+        .map(|c| c.trim_matches(',').trim().parse::<usize>())
+        .collect::<Result<Vec<_>, _>>()
+}
+
+fn read_behavior_input(filename: &str) -> Result<Vec<Observation>, ReadError> {
+    let f = File::open(filename)?;
+    let mut reader = BufReader::new(f);
+    let mut line = String::new();
+    let mut observations: Vec<Observation> = Vec::new();
+
+    loop {
+        line.truncate(0);
+        reader.read_line(&mut line)?;
+        if !line.starts_with("Before:") {
+            break;
+        } // have hit the end of test cases
+        let before = extract_numbers(&line)?;
+        line.truncate(0);
+        reader.read_line(&mut line)?;
+        let instructions = extract_numbers(&line)?;
+        line.truncate(0);
+        reader.read_line(&mut line)?;
+        let after = extract_numbers(&line)?;
+        line.truncate(0);
+        reader.read_line(&mut line)?;
+        if instructions.len() != 4 || before.len() != 4 || after.len() != 4 {
+            return Err(ReadError::MissingNumbers);
+        }
+        observations.push(Observation::new(&instructions, &before, &after));
+    }
+    Ok(observations)
 }
 
 #[derive(Debug)]
@@ -21,6 +114,27 @@ impl CPU {
     fn new(r0: usize, r1: usize, r2: usize, r3: usize) -> CPU {
         CPU {
             registers: [r0, r1, r2, r3],
+        }
+    }
+    fn process(&mut self, opcode: usize, a: usize, b: usize, c: usize) {
+        match opcode {
+            0 => self.addr(a, b, c),
+            1 => self.addi(a, b, c),
+            2 => self.mulr(a, b, c),
+            3 => self.muli(a, b, c),
+            4 => self.banr(a, b, c),
+            5 => self.bani(a, b, c),
+            6 => self.borr(a, b, c),
+            7 => self.bori(a, b, c),
+            8 => self.setr(a, b, c),
+            9 => self.seti(a, b, c),
+            10 => self.gtir(a, b, c),
+            11 => self.gtri(a, b, c),
+            12 => self.gtrr(a, b, c),
+            13 => self.eqir(a, b, c),
+            14 => self.eqri(a, b, c),
+            15 => self.eqrr(a, b, c),
+            _ => unreachable!(),
         }
     }
     fn addr(&mut self, a: usize, b: usize, c: usize) {
@@ -79,6 +193,18 @@ impl CPU {
             0
         }
     }
+}
+
+fn behaves_like(instruction: &[usize], before: &[usize], after: &[usize]) -> u8 {
+    let mut n_like: u8 = 0;
+    for opcode in 0..16 {
+        let mut cpu = CPU::new(before[0], before[1], before[2], before[3]);
+        cpu.process(opcode, instruction[1], instruction[2], instruction[3]);
+        if cpu.registers == [after[0], after[1], after[2], after[3]] {
+            n_like += 1;
+        }
+    }
+    n_like
 }
 
 #[cfg(test)]
@@ -192,5 +318,33 @@ mod tests {
         assert_eq!([2, 2, 1, 1], cpu.registers);
         cpu.eqrr(0, 2, 3);
         assert_eq!([2, 2, 1, 0], cpu.registers);
+    }
+    #[test]
+    fn test_behaves_like() {
+        let instruction = [9, 2, 1, 2];
+        let before = [3, 2, 1, 1];
+        let after = [3, 2, 2, 1];
+        assert_eq!(3, behaves_like(&instruction, &before, &after));
+    }
+    #[test]
+    fn test_extract_numbers() {
+        assert_eq!(vec![1, 2, 3, 4], extract_numbers("1 2 3 4").unwrap());
+        assert_eq!(vec![1, 2, 3, 4], extract_numbers("1 2 3 4\n").unwrap());
+        assert_eq!(
+            vec![0, 1, 0, 1],
+            extract_numbers("Before: [0, 1, 0, 1]").unwrap()
+        );
+        assert_eq!(
+            vec![0, 1, 0, 1],
+            extract_numbers("Before: [0, 1, 0, 1]\n").unwrap()
+        );
+        assert_eq!(
+            vec![1, 0, 1, 0],
+            extract_numbers("After: [1, 0, 1, 0]").unwrap()
+        );
+        assert_eq!(
+            vec![1, 0, 1, 0],
+            extract_numbers("After: [1, 0, 1, 0]\n").unwrap()
+        );
     }
 }
