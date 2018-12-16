@@ -27,6 +27,21 @@ fn main() {
         for pair in pairs {
             println!("{}: {}", pair.0, pair.1);
         }
+    } else if task == "run" {
+        let instructions = read_program_input(filename).unwrap();
+        let mut cpu = CPU::new(0, 0, 0, 0);
+        for instruction in instructions {
+            cpu.process(
+                instruction[0],
+                instruction[1],
+                instruction[2],
+                instruction[3],
+            );
+        }
+        println!(
+            "{} {} {} {}",
+            cpu.registers[0], cpu.registers[1], cpu.registers[2], cpu.registers[3]
+        );
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -110,6 +125,27 @@ fn read_behavior_input(filename: &str) -> Result<Vec<Observation>, ReadError> {
         observations.push(Observation::new(&instructions, &before, &after));
     }
     Ok(observations)
+}
+
+fn read_program_input(filename: &str) -> Result<Vec<[usize; 4]>, ReadError> {
+    let f = File::open(filename)?;
+    let reader = BufReader::new(f);
+    let mut instructions: Vec<[usize; 4]> = Vec::new();
+
+    for maybe_line in reader.lines() {
+        let line = maybe_line?;
+        let instruction = extract_numbers(&line)?;
+        if instruction.len() != 4 {
+            return Err(ReadError::MissingNumbers);
+        }
+        instructions.push([
+            instruction[0],
+            instruction[1],
+            instruction[2],
+            instruction[3],
+        ]);
+    }
+    Ok(instructions)
 }
 
 #[derive(Debug)]
