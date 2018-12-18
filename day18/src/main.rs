@@ -1,4 +1,5 @@
 #![allow(unused_doc_comments)]
+use std::collections::HashMap;
 use std::env;
 use std::fmt;
 use std::fs::File;
@@ -21,6 +22,41 @@ fn main() {
 
     if task == "resources" {
         for _ in 0..10 {
+            board = board.evolve();
+        }
+        let n_tree = board.count_acre(Acre::Tree);
+        let n_yard = board.count_acre(Acre::Yard);
+        println!(
+            "{} trees and {} lumberyards = {}",
+            n_tree,
+            n_yard,
+            n_tree * n_yard
+        );
+    } else if task == "longterm" {
+        let mut states: HashMap<String, usize> = HashMap::new();
+        let mut period: Option<usize> = None;
+        let mut offset: Option<usize> = None;
+        for i in 0..100_000 {
+            let board_s = format!("{}", board);
+            if states.contains_key(&board_s) {
+                let t_0 = states.get(&board_s).unwrap();
+                let t_1 = i;
+                period = Some(t_1 - t_0);
+                offset = Some(*t_0);
+                println!("Same state {} to {}", states.get(&board_s).unwrap(), i);
+                break;
+            }
+            states.insert(board_s, i);
+            board = board.evolve();
+        }
+        let o = offset.expect("Didn't find anything");
+        let p = period.unwrap();
+        let n_gens = (1_000_000_000 - o) % p;
+        let desired_gen = o + n_gens;
+        println!("1_000_000_000 will be the same as {}", desired_gen);
+
+        let mut board = read_board(&contents);
+        for _ in 0..desired_gen {
             board = board.evolve();
         }
         let n_tree = board.count_acre(Acre::Tree);
