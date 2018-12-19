@@ -4,6 +4,8 @@ use std::env;
 use std::fmt;
 use std::fs::File;
 use std::io::Read;
+use std::thread;
+use std::time;
 
 #[macro_use]
 extern crate itertools;
@@ -67,6 +69,13 @@ fn main() {
             n_yard,
             n_tree * n_yard
         );
+    } else if task == "animate" {
+        loop {
+            board = board.evolve();
+            print!("{}[2J", 27 as char);
+            println!("{}", board);
+            thread::sleep(time::Duration::from_millis(50));
+        }
     } else {
         panic!("Don't know how to '{}'", task);
     }
