@@ -1,5 +1,6 @@
 #![allow(unused_doc_comments)]
 use std::env;
+use std::fmt;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -11,10 +12,15 @@ fn main() {
     let task = &args[1];
     let filename = &args[2];
 
-    if task == "run" {
-        let (ipointer_idx, instructions) = read_program_input(filename).expect("Bad program");
+    let (ipointer_idx, instructions) = read_program_input(filename).expect("Bad program");
+
+    if task == "run0" {
         let mut cpu = CPU::new();
         cpu.run(ipointer_idx, &instructions);
+        println!("{}", cpu.registers[0]);
+    } else if task == "run1" {
+        let mut cpu = CPU::new_state([1, 0, 0, 0, 0, 0]);
+        cpu.run_and_inspect(ipointer_idx, &instructions);
         println!("{}", cpu.registers[0]);
     } else {
         panic!("Don't know how to '{}'", task);
@@ -142,9 +148,25 @@ impl FromStr for Instruction {
 
 const N_REGISTERS: usize = 6;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct CPU {
     registers: [usize; N_REGISTERS],
+}
+
+impl fmt::Display for CPU {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "[{}, {}, {}, {}, {}, {}]",
+            self.registers[0],
+            self.registers[1],
+            self.registers[2],
+            self.registers[3],
+            self.registers[4],
+            self.registers[5]
+        )?;
+        Ok(())
+    }
 }
 
 impl CPU {
@@ -165,6 +187,25 @@ impl CPU {
                 self.registers[ipointer_idx] += 1;
             } else {
                 break;
+            }
+        }
+    }
+    fn run_and_inspect(&mut self, ipointer_idx: usize, instructions: &[Instruction]) {
+        let mut last0 = 1;
+        let mut last_state = self.clone();
+        loop {
+            last_state = self.clone();
+            let inst_idx = self.registers[ipointer_idx];
+            let instruction = instructions[inst_idx];
+            self.process(&instruction);
+            if self.registers[ipointer_idx] + 1 < instructions.len() {
+                self.registers[ipointer_idx] += 1;
+            } else {
+                break;
+            }
+            if last0 != self.registers[0] {
+                last0 = self.registers[0];
+                println!("{} -> {}", last_state, self);
             }
         }
     }
