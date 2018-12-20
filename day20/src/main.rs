@@ -1,5 +1,5 @@
 #![allow(unused_doc_comments)]
-use std::collections::HashMap;
+use std::cmp::max;
 use std::collections::VecDeque;
 use std::env;
 use std::fs;
@@ -12,36 +12,9 @@ fn main() {
     let regex = fs::read_to_string(filename).expect("Couldn't read file");
 
     if task == "shortest" {
-        let facility = parse_regex(&regex);
-        println!("{}", shortest_path(&facility));
+        println!("{}", direct_shortest_regex(&regex));
     } else {
         panic!("Don't know how to '{}'", task);
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct Facility {
-    paths: Vec<Path>,
-}
-
-impl Facility {
-    fn new() -> Facility {
-        Facility { paths: Vec::new() }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct Path {
-    children: Vec<usize>,
-    directions: String,
-}
-
-impl Path {
-    fn new(s: &str) -> Path {
-        Path {
-            children: Vec::new(),
-            directions: s.to_string(),
-        }
     }
 }
 
@@ -97,125 +70,34 @@ fn split_regex(s: &str) -> (&str, Vec<&str>, &str) {
     }
 }
 
-fn _parse_regex(regex: &str) -> Facility {
-    let mut fac = Facility::new();
-    let mut queue: VecDeque<(Option<usize>, &str)> = VecDeque::from(vec![(None, regex)]);
+fn _direct_shortest_regex(regex: &str) -> usize {
+    let mut queue: VecDeque<(usize, &str)> = VecDeque::from(vec![(0, regex)]);
+    let mut shortest = 0;
     while !queue.is_empty() {
-        let (parent, s) = queue.pop_front().unwrap();
+        let (l, s) = queue.pop_front().unwrap();
         let (head, branches, tail) = split_regex(s);
 
-        let last_added = fac.paths.len();
-        fac.paths.push(Path::new(head));
-        match parent {
-            Some(i) => {
-                fac.paths[i].children.push(last_added);
+        let new_l = l + head.len();
+        shortest = max(shortest, new_l);
+        if !branches.iter().any(|b| b.is_empty()) {
+            for branch in branches {
+                queue.push_back((new_l, branch));
             }
-            None => {
-                // if we just finished handling branches, need to mark
-                // the new path as a child to all of them. Conveniently,
-                // these will be the only ones with no children.
-                for i in 0..last_added {
-                    if fac.paths[i].children.is_empty() {
-                        fac.paths[i].children.push(last_added);
-                    }
-                }
-            }
-        }
-
-        for branch in branches {
-            queue.push_back((Some(last_added), branch));
         }
         if !tail.is_empty() {
-            queue.push_back((None, tail));
+            queue.push_back((new_l, tail));
         }
     }
-    fac
+    shortest
 }
 
-fn parse_regex(s: &str) -> Facility {
+fn direct_shortest_regex(s: &str) -> usize {
     match (s.find('^'), s.find('$')) {
-        (Some(c), Some(d)) => _parse_regex(&s[(c + 1)..d]),
+        (Some(c), Some(d)) => _direct_shortest_regex(&s[(c + 1)..d]),
         (_, _) => {
             panic!("Invalid regex");
         }
     }
-}
-/*
-fn shortest_path_no_recursion(fac: &Facility) -> usize {
-    let mut longest_from: HashMap<usize, usize> = HashMap::new();
-    let mut stack: Vec<(usize, usize)> = vec![(0, 0)];
-    let mut longest = 0;
-    while !stack.is_empty() {
-        let (path_idx, len) = stack.pop().unwrap();
-        let path = &fac.paths[path_idx];
-        let new_len = len + path.directions.len();
-        if path.children.is_empty() {
-            longest_from.insert(path_idx, path.directions.len());
-        }
-        let memoized_len = longest_from.entry(path_idx).or_insert(new_len);
-        *memoized_len = min(*memoized_len, new_len);
-        match path
-            .children
-            .iter()
-            .filter(|&c| fac.paths[*c].directions.len() == 0)
-            .next()
-        {
-            Some(child) => {
-                if !stack.iter().any(|(i, _)| i == child) {
-                    stack.push((*child, new_len));
-                }
-            }
-            None => {
-                for child in &path.children {
-                    if !stack.iter().any(|(i, _)| i == child) {
-                        stack.push((*child, new_len));
-                    }
-                }
-            }
-        }
-    }
-    longest
-}
-*/
-
-fn _shortest_path(fac: &Facility, start: usize, memo: &mut HashMap<usize, usize>) -> usize {
-    if let Some(longest) = memo.get(&start) {
-        return *longest;
-    }
-    let path = &fac.paths[start];
-    let len = path.directions.len();
-    if path.children.is_empty() {
-        memo.insert(start, len);
-        return len;
-    }
-    match path
-        .children
-        .iter()
-        .find(|&c| fac.paths[*c].directions.is_empty())
-    {
-        Some(child) => {
-            // in the case we have an empty option and can skip straight on
-            let next_len = len + _shortest_path(fac, *child, memo);
-            memo.insert(start, next_len);
-            next_len
-        }
-        None => {
-            let next_len = path
-                .children
-                .iter()
-                .map(|c| _shortest_path(fac, *c, memo))
-                .max()
-                .unwrap_or(0)
-                + len;
-            memo.insert(start, next_len);
-            next_len
-        }
-    }
-}
-
-fn shortest_path(fac: &Facility) -> usize {
-    let mut hm: HashMap<usize, usize> = HashMap::new();
-    _shortest_path(fac, 0, &mut hm)
 }
 
 #[cfg(test)]
@@ -278,84 +160,6 @@ mod tests {
     }
 
     #[test]
-    fn test_parse() {
-        struct TestCase {
-            input: String,
-            expected: Facility,
-        }
-
-        let cases = vec![
-            TestCase {
-                input: "^WNE$".to_string(),
-                expected: Facility {
-                    paths: vec![Path {
-                        children: vec![],
-                        directions: "WNE".to_string(),
-                    }],
-                },
-            },
-            TestCase {
-                input: "^N(NESW|WNES|)N$".to_string(),
-                expected: Facility {
-                    paths: vec![
-                        Path {
-                            children: vec![1, 2, 3],
-                            directions: "N".to_string(),
-                        },
-                        Path {
-                            children: vec![4],
-                            directions: "NESW".to_string(),
-                        },
-                        Path {
-                            children: vec![4],
-                            directions: "WNES".to_string(),
-                        },
-                        Path {
-                            children: vec![4],
-                            directions: "".to_string(),
-                        },
-                        Path {
-                            children: vec![],
-                            directions: "N".to_string(),
-                        },
-                    ],
-                },
-            },
-            TestCase {
-                input: String::from("^ENWWW(NEEE|SSE(EE|N))$"),
-                expected: Facility {
-                    paths: vec![
-                        Path {
-                            children: vec![1, 2],
-                            directions: "ENWWW".to_string(),
-                        },
-                        Path {
-                            children: vec![],
-                            directions: "NEEE".to_string(),
-                        },
-                        Path {
-                            children: vec![3, 4],
-                            directions: "SSE".to_string(),
-                        },
-                        Path {
-                            children: vec![],
-                            directions: "EE".to_string(),
-                        },
-                        Path {
-                            children: vec![],
-                            directions: "N".to_string(),
-                        },
-                    ],
-                },
-            },
-        ];
-
-        for case in cases {
-            assert_eq!(case.expected, parse_regex(&case.input));
-        }
-    }
-
-    #[test]
     fn test_shortest_path() {
         struct TestCase {
             input: String,
@@ -387,8 +191,7 @@ mod tests {
         ];
 
         for case in cases {
-            let facility = parse_regex(&case.input);
-            assert_eq!(case.expected, shortest_path(&facility));
+            assert_eq!(case.expected, direct_shortest_regex(&case.input));
         }
     }
 }
