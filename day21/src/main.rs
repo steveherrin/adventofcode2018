@@ -1,4 +1,7 @@
 #![allow(unused_doc_comments)]
+use std::cmp::max;
+use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use std::fs::File;
@@ -20,6 +23,10 @@ fn main() {
         println!("{}", reg0_val);
         cpu = CPU::new_state([reg0_val, 0, 0, 0, 0, 0]);
         println!("halted after {}", cpu.run(ipointer_idx, &instructions));
+    } else if task == "largest" {
+        let mut cpu = CPU::new();
+        let halt_val = cpu.most_instructions(ipointer_idx, &instructions);
+        println!("{}", halt_val);
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -178,9 +185,43 @@ impl CPU {
     }
     fn run(&mut self, ipointer_idx: usize, instructions: &[Instruction]) -> usize {
         let mut i = 0;
+        let mut largest = 0;
         loop {
             let inst_idx = self.registers[ipointer_idx];
             let instruction = instructions[inst_idx];
+            self.process(&instruction);
+            for i in 0..6 {
+                largest = max(self.registers[i], largest);
+            }
+            if self.registers[ipointer_idx] + 1 < instructions.len() {
+                self.registers[ipointer_idx] += 1;
+            } else {
+                println!("{} largest seen {}", self, largest);
+                break;
+            }
+            i += 1;
+        }
+        i
+    }
+
+    fn most_instructions(&mut self, ipointer_idx: usize, instructions: &[Instruction]) -> usize {
+        /// return the initial value that results in the most instructions run before halting
+        let mut states_seen: HashSet<[usize; N_REGISTERS]> = HashSet::new();
+        let mut halt_after: HashMap<usize, usize> = HashMap::new();
+        let mut i = 0;
+        loop {
+            let inst_idx = self.registers[ipointer_idx];
+            let instruction = instructions[inst_idx];
+            if instruction.opcode == Opcode::Eqrr {
+                // If we'd been in this state before, we would already have halted
+                // and we're now looping around
+                if states_seen.contains(&self.registers) {
+                    break;
+                } else {
+                    halt_after.insert(self.registers[4], i);
+                    states_seen.insert(self.registers);
+                }
+            }
             self.process(&instruction);
             if self.registers[ipointer_idx] + 1 < instructions.len() {
                 self.registers[ipointer_idx] += 1;
@@ -189,31 +230,16 @@ impl CPU {
             }
             i += 1;
         }
-        i
+
+        *halt_after
+            .iter()
+            .max_by_key(|(_hv, n)| *n)
+            .expect("No values halt")
+            .0
     }
-    /*
-    fn run_and_inspect(&mut self, ipointer_idx: usize, instructions: &[Instruction]) {
-        let mut last0 = 1;
-        let mut last_state = self.clone();
-        loop {
-            last_state = self.clone();
-            let inst_idx = self.registers[ipointer_idx];
-            let instruction = instructions[inst_idx];
-            self.process(&instruction);
-            if self.registers[ipointer_idx] + 1 < instructions.len() {
-                self.registers[ipointer_idx] += 1;
-            } else {
-                break;
-            }
-            if last0 != self.registers[0] {
-                last0 = self.registers[0];
-                println!("{} -> {}", last_state, self);
-            }
-        }
-    }
-    */
 
     fn run_breakpoint(&mut self, ipointer_idx: usize, instructions: &[Instruction]) -> usize {
+        /// Run until a hardcoded breakpoint and return a value of a hardcoded
         loop {
             let inst_idx = self.registers[ipointer_idx];
             let instruction = instructions[inst_idx];
