@@ -84,8 +84,7 @@ fn most_doors_path(regex: &str) -> usize {
     }; // trim off the start and end markers
     let mut queue: VecDeque<(usize, &str)> = VecDeque::from(vec![(0, trimmed)]);
     let mut most_doors = 0;
-    while !queue.is_empty() {
-        let (l, s) = queue.pop_front().unwrap();
+    while let Some((l, s)) = queue.pop_front() {
         let (head, branches, tail) = split_regex(s);
 
         let new_l = l + head.len();
@@ -117,8 +116,7 @@ fn count_over_1k(regex: &str) -> usize {
     let mut queue: VecDeque<(usize, i32, i32, &str)> = VecDeque::from(vec![(0, 0, 0, trimmed)]);
     let mut most_doors = 0;
     let mut over1k: HashSet<(i32, i32)> = HashSet::new(); // keep track of relative x,y of rooms over 1k
-    while !queue.is_empty() {
-        let (l, mut r_x, mut r_y, s) = queue.pop_front().unwrap();
+    while let Some((l, mut r_x, mut r_y, s)) = queue.pop_front() {
         let (head, branches, tail) = split_regex(s);
 
         // figure out how far NS/EW we are relative to the start
