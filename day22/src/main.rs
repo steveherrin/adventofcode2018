@@ -8,23 +8,18 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
 
+    let depth = args[2].parse::<u64>().expect("Bad depth");
+    let target_x = args[3].parse::<usize>().expect("Bad target x");
+    let target_y = args[4].parse::<usize>().expect("Bad target y");
+
     if task == "risk" {
-        let depth = args[2].parse::<u64>().expect("Bad depth");
-        let target_x = args[3].parse::<usize>().expect("Bad target x");
-        let target_y = args[4].parse::<usize>().expect("Bad target y");
         println!("{}", risk_level(depth, target_x, target_y));
     } else if task == "draw" {
-        let depth = args[2].parse::<u64>().expect("Bad depth");
-        let target_x = args[3].parse::<usize>().expect("Bad target x");
-        let target_y = args[4].parse::<usize>().expect("Bad target y");
         let size_x = target_x + 6;
         let size_y = target_y + 6;
         let cave = Cave::new(depth, target_x, target_y, size_x, size_y);
         println!("{}", cave);
     } else if task == "path" {
-        let depth = args[2].parse::<u64>().expect("Bad depth");
-        let target_x = args[3].parse::<usize>().expect("Bad target x");
-        let target_y = args[4].parse::<usize>().expect("Bad target y");
         let size_x = target_x + 20;
         let size_y = target_y + 20;
         let cave = Cave::new(depth, target_x, target_y, size_x, size_y);
@@ -48,28 +43,15 @@ fn geo_index(x: usize, y: usize) -> u64 {
 
 /// Compute the total risk of the rectangle with corners and 0,0 and the target
 fn risk_level(depth: u64, target_x: usize, target_y: usize) -> u64 {
-    let size_x = target_x + 1;
-    let size_y = target_y + 1;
-    let mut cave: Vec<u64> = vec![0; size_x * size_y];
-    for y in 0..size_y {
-        for x in 0..size_x {
-            let idx = x + y * size_x;
-            if x == 0 || y == 0 {
-                cave[idx] = geo_index(x, y);
-            } else if x == target_x && y == target_y {
-                cave[idx] = 0;
-            } else {
-                let left_erosion = cave[(x - 1) + y * size_x] + depth;
-                let above_erosion = cave[x + (y - 1) * size_x] + depth;
-                // since we're summing these, use (a * b) % c ≡ (a % c) * (b % c)
-                cave[idx] = (left_erosion * above_erosion) % 20183;
-            }
-        }
-    }
-
-    // making use of (a + b) % c ≡ (a % c) + (b % c)
-    cave.iter()
-        .fold(0, |sum, gi| sum + ((gi + depth) % 20183) % 3)
+    let cave = Cave::new(depth, target_x, target_y, target_x + 1, target_y + 1);
+    cave.caves
+        .iter()
+        .map(|ct| match ct {
+            CaveType::Rocky => 0,
+            CaveType::Wet => 1,
+            CaveType::Narrow => 2,
+        })
+        .sum()
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
