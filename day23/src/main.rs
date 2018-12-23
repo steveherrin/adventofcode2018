@@ -1,9 +1,7 @@
 #[macro_use]
 extern crate lazy_static;
-extern crate priority_queue;
 extern crate regex;
 
-use priority_queue::PriorityQueue;
 use std::cmp::max;
 use std::cmp::min;
 use std::env;
@@ -28,7 +26,10 @@ fn main() {
     if task == "strongest" {
         println!("{}", strongest_range(&bots));
     } else if task == "best" {
-        println!("{}", best_spot(&bots));
+        let best = best_spot(&bots);
+        let d = best.0.abs() + best.1.abs() + best.2.abs();
+        println!("best at ({}, {}, {})", best.0, best.1, best.2);
+        println!("{}", d);
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -86,6 +87,7 @@ impl Bot {
     }
 }
 
+/// Find the number of bots in range of the stongest bot
 fn strongest_range(bots: &[Bot]) -> usize {
     let strongest = bots.iter().max_by_key(|b| b.r).expect("No bots");
     bots.iter()
@@ -118,124 +120,96 @@ impl Volume {
         Volume::new(0, 0, 0, 0, 0, 0)
     }
     fn containing_bots(bots: &[Bot]) -> Volume {
-        let mut vol = Volume::new_zero();
-        for bot in bots {
-            vol.x_lo = min(vol.x_lo, bot.x - bot.r);
-            vol.y_lo = min(vol.y_lo, bot.y - bot.r);
-            vol.z_lo = min(vol.z_lo, bot.z - bot.r);
-            vol.x_hi = max(vol.x_hi, bot.x + bot.r);
-            vol.y_hi = max(vol.y_hi, bot.y + bot.r);
-            vol.z_hi = max(vol.z_hi, bot.z + bot.r);
+        if bots.len() == 0 {
+            Volume::new_zero()
+        } else {
+            let bot = &bots[0];
+            let mut vol = Volume {
+                x_lo: bot.x,
+                x_hi: bot.x,
+                y_lo: bot.y,
+                y_hi: bot.y,
+                z_lo: bot.z,
+                z_hi: bot.z,
+            };
+            for bot in bots.iter().skip(1) {
+                vol.x_lo = min(vol.x_lo, bot.x);
+                vol.y_lo = min(vol.y_lo, bot.y);
+                vol.z_lo = min(vol.z_lo, bot.z);
+                vol.x_hi = max(vol.x_hi, bot.x);
+                vol.y_hi = max(vol.y_hi, bot.y);
+                vol.z_hi = max(vol.z_hi, bot.z);
+            }
+            vol
         }
-        vol
-    }
-    fn n_in_range(&self, bots: &[Bot]) -> usize {
-        bots.iter()
-            .filter(|b| b.x - b.r <= self.x_hi && self.x_lo <= b.x + b.r)
-            .filter(|b| b.y - b.r <= self.y_hi && self.y_lo <= b.y + b.r)
-            .filter(|b| b.z - b.r <= self.z_hi && self.z_lo <= b.z + b.r)
-            .count()
-    }
-    fn is_point(&self) -> bool {
-        self.x_lo == self.x_hi && self.y_lo == self.y_hi && self.z_lo == self.z_hi
-    }
-    fn min_corner_distance(&self) -> i64 {
-        min(self.x_lo.abs(), self.x_hi.abs())
-            + min(self.y_lo.abs(), self.y_hi.abs())
-            + min(self.z_lo.abs(), self.z_hi.abs())
-    }
-    fn octants(&self) -> Vec<Volume> {
-        let x_mid = (self.x_lo + self.x_hi) / 2;
-        let y_mid = (self.y_lo + self.y_hi) / 2;
-        let z_mid = (self.z_lo + self.z_hi) / 2;
-        let mut octants = vec![
-            Volume::new(self.x_lo, x_mid, self.y_lo, y_mid, self.z_lo, z_mid),
-            Volume::new(self.x_lo, x_mid, self.y_lo, y_mid, z_mid + 1, self.z_hi),
-            Volume::new(self.x_lo, x_mid, y_mid + 1, self.y_hi, self.z_lo, z_mid),
-            Volume::new(self.x_lo, x_mid, y_mid + 1, self.y_hi, z_mid + 1, self.z_hi),
-            Volume::new(x_mid + 1, self.x_hi, self.y_lo, y_mid, self.z_lo, z_mid),
-            Volume::new(x_mid + 1, self.x_hi, self.y_lo, y_mid, z_mid + 1, self.z_hi),
-            Volume::new(x_mid + 1, self.x_hi, y_mid + 1, self.y_hi, self.z_lo, z_mid),
-            Volume::new(
-                x_mid + 1,
-                self.x_hi,
-                y_mid + 1,
-                self.y_hi,
-                z_mid + 1,
-                self.z_hi,
-            ),
-        ];
-        // by adding 1 to ensure non-overlapping octants,
-        // we might have created some invalid ones; strip them out
-        octants.retain(|v| v.x_lo <= v.x_hi && v.y_lo <= v.y_hi && v.z_lo <= v.z_hi);
-        //println!("before: {:?}", octants);
-        // don't duplicate itself
-        octants.retain(|v| {
-            v.x_lo != self.x_lo
-                || v.x_hi != self.x_hi
-                || v.y_lo != self.y_lo
-                || v.y_hi != self.y_hi
-                || v.z_lo != self.z_lo
-                || v.z_hi != self.z_hi
-        });
-        //println!("after: {:?}", octants);
-        octants
     }
 }
 
+/// Number of bots in range of (x, y, z)
 fn n_in_range(x: i64, y: i64, z: i64, bots: &[Bot]) -> usize {
     bots.iter()
         .filter(|b| b.distance_xyz(x, y, z) <= b.r)
         .count()
 }
 
-fn best_spot(bots: &[Bot]) -> i64 {
-    let mut queue: PriorityQueue<Volume, usize> = PriorityQueue::new();
-    let full_volume = Volume::containing_bots(bots);
-    let full_n = full_volume.n_in_range(bots);
-    queue.push(full_volume, full_n);
-    let mut i = 0;
-    let mut best_n = 0;
-    let mut best: Vec<Volume> = Vec::new();
-    while let Some((vol, n)) = queue.pop() {
-        if i % 100000 == 0 {
-            println!("queue {}", queue.len());
-            //println!("{} {:?}", n, vol);
-        }
-        i += 1;
-        for oct in vol.octants() {
-            let oct_n = oct.n_in_range(bots);
-            if oct.is_point() && oct_n > best_n {
-                best_n = oct_n;
-            }
-            //println!("  {} {:?}", oct_n, oct);
-            if oct_n >= best_n {
-                queue.push(oct, oct_n);
-            }
-        }
-        if n >= best_n && vol.is_point() {
-            best.push(vol);
-        }
+/// Find the best spot to stand amid the nanobots
+/// I don't think this is a general solution; it relies on "most"
+/// of the bots covering a similar volume, so that you can
+/// binary search by looking at the number of points in range
+/// of a given point.
+fn best_spot(bots: &[Bot]) -> (i64, i64, i64) {
+    // the maximum spot should be somewhere inside the bot volume
+    let mut vol = Volume::containing_bots(bots);
+
+    // figure out a step size that covers the whole volume for our search
+    let mut range: i64 = 1;
+    while range < vol.x_hi - vol.x_lo || range < vol.y_hi - vol.y_lo || range < vol.z_hi - vol.z_lo
+    {
+        range *= 2;
     }
-    best.sort_by_key(|v| {
-        (
-            n_in_range(v.x_lo, v.y_lo, v.z_lo, bots),
-            -v.min_corner_distance(),
-        )
-    });
-    best.last().expect("No best spot").min_corner_distance()
-}
+    range /= 2; // don't skip over the full volume on the first step
 
-/*
-fn best_spot(bots: &[Bot]) -> i64 {
-    let pois = find_search_points(bots);
-    println!("{} points", pois.n_points());
-    let (n, d) = best_point(bots, &pois);
-
-    println!("best was {} at {}", n, d);
-    d
+    // keep track of our best so far
+    let mut best_n = 0;
+    let mut best_x = 0;
+    let mut best_y = 0;
+    let mut best_z = 0;
+    loop {
+        for x in (vol.x_lo..=vol.x_hi).step_by(range as usize) {
+            for y in (vol.y_lo..=vol.y_hi).step_by(range as usize) {
+                for z in (vol.z_lo..=vol.z_hi).step_by(range as usize) {
+                    let n = n_in_range(x, y, z, bots);
+                    if n >= best_n {
+                        best_n = n;
+                        best_x = x;
+                        best_y = y;
+                        best_z = z;
+                    } else if n == best_n
+                        && x.abs() + y.abs() + z.abs() < best_x.abs() + best_y.abs() + best_z.abs()
+                    {
+                        // in case of a tie, pick the one closest to the origin
+                        best_x = x;
+                        best_y = z;
+                        best_z = z;
+                    }
+                }
+            }
+        }
+        if range == 1 {
+            // once we've gone through and found the best single point, we're done
+            break;
+        }
+        // focus on the volume around the best point we've seen
+        vol.x_lo = best_x - range;
+        vol.x_hi = best_x + range;
+        vol.y_lo = best_y - range;
+        vol.y_hi = best_y + range;
+        vol.z_lo = best_z - range;
+        vol.z_hi = best_z + range;
+        range /= 2;
+    }
+    (best_x, best_y, best_z)
 }
-*/
 
 #[cfg(test)]
 mod tests {
@@ -267,6 +241,6 @@ mod tests {
             "pos=<50,50,50>, r=200".parse::<Bot>().unwrap(),
             "pos=<10,10,10>, r=5".parse::<Bot>().unwrap(),
         ];
-        assert_eq!(36, best_spot(&bots));
+        assert_eq!((12, 12, 12), best_spot(&bots));
     }
 }
