@@ -1,6 +1,8 @@
+#![allow(unused_doc_comments)]
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+extern crate z3;
 
 use std::cmp::max;
 use std::cmp::min;
@@ -27,6 +29,11 @@ fn main() {
         println!("{}", strongest_range(&bots));
     } else if task == "best" {
         let best = best_spot(&bots);
+        let d = best.0.abs() + best.1.abs() + best.2.abs();
+        println!("best at ({}, {}, {})", best.0, best.1, best.2);
+        println!("{}", d);
+    } else if task == "bestz3" {
+        let best = best_spot_z3(&bots);
         let d = best.0.abs() + best.1.abs() + best.2.abs();
         println!("best at ({}, {}, {})", best.0, best.1, best.2);
         println!("{}", d);
@@ -211,6 +218,56 @@ fn best_spot(bots: &[Bot]) -> (i64, i64, i64) {
     (best_x, best_y, best_z)
 }
 
+fn best_spot_z3(bots: &[Bot]) -> (i64, i64, i64) {
+    let cfg = z3::Config::new();
+    let ctx = z3::Context::new(&cfg);
+    let opt = z3::Optimize::new(&ctx);
+
+    let x = ctx.named_int_const("x");
+    let y = ctx.named_int_const("y");
+    let z = ctx.named_int_const("z");
+
+    let n_in_range = ctx.named_int_const("n_in_range");
+
+    // sum the number of bots in range
+    let mut _in_ranges = Vec::new();
+    for bot in bots {
+        let in_range = ctx.fresh_int_const("in_range");
+        let dx = x.sub(&[&ctx.from_i64(bot.x)]);
+        let adx = dx.lt(&ctx.from_i64(0)).ite(&dx.minus(), &dx);
+        let dy = y.sub(&[&ctx.from_i64(bot.y)]);
+        let ady = dy.lt(&ctx.from_i64(0)).ite(&dy.minus(), &dy);
+        let dz = z.sub(&[&ctx.from_i64(bot.z)]);
+        let adz = dz.lt(&ctx.from_i64(0)).ite(&dz.minus(), &dz);
+        let distances = vec![&adx, &ady, &adz];
+        let point_in_range = ctx.from_i64(bot.r).sub(&distances[..]).ge(&ctx.from_i64(0));
+        opt.assert(&in_range._eq(&point_in_range.ite(&ctx.from_i64(1), &ctx.from_i64(0))));
+        _in_ranges.push(in_range);
+    }
+    let in_ranges = &_in_ranges.iter().collect::<Vec<&z3::Ast<'_>>>();
+    opt.assert(&n_in_range.sub(&in_ranges[..])._eq(&ctx.from_i64(0)));
+
+    // sum absolute values to get distance from zero
+    let d_from_zero = ctx.named_int_const("d_from_zero");
+    let ax = x.lt(&ctx.from_i64(0)).ite(&x.minus(), &x);
+    let ay = y.lt(&ctx.from_i64(0)).ite(&y.minus(), &y);
+    let az = z.lt(&ctx.from_i64(0)).ite(&z.minus(), &z);
+    let distances = vec![&ax, &ay, &az];
+    opt.assert(&d_from_zero.sub(&distances[..])._eq(&ctx.from_i64(0))); // sum absolute vals
+
+    opt.maximize(&n_in_range);
+    opt.minimize(&d_from_zero);
+
+    if !opt.check() {
+        panic!("Couldn't find an optimal solution");
+    }
+    let model = opt.get_model();
+    let vx = model.eval(&x).unwrap().as_i64().unwrap();
+    let vy = model.eval(&y).unwrap().as_i64().unwrap();
+    let vz = model.eval(&z).unwrap().as_i64().unwrap();
+    (vx, vy, vz)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -242,5 +299,18 @@ mod tests {
             "pos=<10,10,10>, r=5".parse::<Bot>().unwrap(),
         ];
         assert_eq!((12, 12, 12), best_spot(&bots));
+    }
+
+    #[test]
+    fn test_best_spot_z3() {
+        let bots = vec![
+            "pos=<10,12,12>, r=2".parse::<Bot>().unwrap(),
+            "pos=<12,14,12>, r=2".parse::<Bot>().unwrap(),
+            "pos=<16,12,12>, r=4".parse::<Bot>().unwrap(),
+            "pos=<14,14,14>, r=6".parse::<Bot>().unwrap(),
+            "pos=<50,50,50>, r=200".parse::<Bot>().unwrap(),
+            "pos=<10,10,10>, r=5".parse::<Bot>().unwrap(),
+        ];
+        assert_eq!((12, 12, 12), best_spot_z3(&bots));
     }
 }
