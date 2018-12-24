@@ -4,6 +4,7 @@ use std::cmp::min;
 use std::collections::HashMap;
 use std::env;
 
+#[allow(unused_assignments)]
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
@@ -22,44 +23,19 @@ fn main() {
         // prior to binary search
         // first find an upper boost that lets immune win
         let mut boost = 1;
+        let mut n_left = 0;
         loop {
-            println!("trying {}", boost);
             let mut boosted_groups = boost_groups(&groups, boost);
-            if let Some((side, _)) = battle(&mut boosted_groups) {
+            if let Some((side, n_side)) = battle(&mut boosted_groups) {
                 if side == Side::Immune {
+                    n_left = n_side;
                     break;
                 }
             }
-            boost *= 2;
+            boost += 1;
         }
-
-        // then do the binary search
-        let mut boost_lo = boost / 2;
-        let mut boost_hi = boost;
-        let mut n_left = 0;
-        while boost_lo != boost_hi {
-            let boost_mid = (boost_hi + boost_lo) / 2;
-            println!("{}-{}-{}", boost_lo, boost_mid, boost_hi);
-            let mut boosted_groups = boost_groups(&groups, boost_mid);
-            if let Some((side, n_side)) = battle(&mut boosted_groups) {
-                n_left = n_side;
-                if side == Side::Immune {
-                    println!("  immune");
-                    boost_hi = boost_mid;
-                } else {
-                    println!("  infection");
-                    boost_lo = boost_mid;
-                }
-            } else {
-                boost_lo += 1;
-            }
-        }
-        println!("took {} boost", boost_lo);
+        println!("took {} boost", boost);
         println!("{}", n_left);
-        let mut boosted_groups = boost_groups(&groups, boost_lo);
-        println!("{:?}", battle(&mut boosted_groups));
-        let mut boosted_groups = boost_groups(&groups, 29);
-        println!("{:?}", battle(&mut boosted_groups));
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -345,10 +321,8 @@ impl Group {
 
     fn attack(&self, other: &mut Group) {
         let damage = self.damage_to(&other);
-        if damage > 0 {
-            let n_killed = min(damage / other.hp_each, other.n_units);
-            other.n_units -= n_killed;
-        }
+        let n_killed = min(damage / other.hp_each, other.n_units);
+        other.n_units -= n_killed;
     }
 
     fn select_target(&self, others: &[Group], already_chosen: &[&usize]) -> Option<usize> {
@@ -358,13 +332,8 @@ impl Group {
             .filter(|o| o.side != self.side)
             .filter(|o| o.id != self.id)
             .filter(|o| o.n_units > 0)
-            .max_by_key(|other| {
-                (
-                    self.damage_to(other),
-                    other.effective_power(),
-                    -other.initiative,
-                )
-            })
+            .max_by_key(|o| (self.damage_to(o), o.effective_power(), o.initiative))
+            .filter(|o| self.damage_to(o) > 0)
             .map(|o| o.id)
     }
 }
@@ -381,9 +350,7 @@ fn battle_step(groups: &mut [Group]) {
         if let Some(target_id) =
             group.select_target(&groups, &targets.values().collect::<Vec<_>>()[..])
         {
-            if group.damage_to(&groups[target_id]) > 0 {
-                targets.insert(group_id, target_id);
-            }
+            targets.insert(group_id, target_id);
         }
     }
 
