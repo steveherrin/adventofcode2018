@@ -81,7 +81,7 @@ impl fmt::Display for Cave {
                 };
                 write!(f, "{}", c)?;
             }
-            writeln!(f, "")?;
+            writeln!(f)?;
         }
         Ok(())
     }

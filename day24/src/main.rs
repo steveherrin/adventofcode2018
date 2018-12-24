@@ -277,6 +277,7 @@ fn battle(groups: &mut [Group]) -> Option<(Side, i64)> {
     }
 }
 
+#[allow(clippy::toplevel_ref_arg)]
 fn boost_groups(groups: &[Group], boost: i64) -> Vec<Group> {
     let mut boosted_groups = groups.to_vec();
     for ref mut group in &mut boosted_groups {

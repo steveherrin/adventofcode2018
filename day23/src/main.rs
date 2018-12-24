@@ -65,6 +65,7 @@ impl From<ParseIntError> for ParseBotError {
 impl FromStr for Bot {
     type Err = ParseBotError;
 
+    #[allow(clippy::many_single_char_names)]
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         lazy_static! {
             static ref RE: Regex = Regex::new(
@@ -127,7 +128,7 @@ impl Volume {
         Volume::new(0, 0, 0, 0, 0, 0)
     }
     fn containing_bots(bots: &[Bot]) -> Volume {
-        if bots.len() == 0 {
+        if bots.is_empty() {
             Volume::new_zero()
         } else {
             let bot = &bots[0];
