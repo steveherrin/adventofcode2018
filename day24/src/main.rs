@@ -11,8 +11,55 @@ fn main() {
     if task == "battle" {
         // harcoding my input because it's easier than writing code to parse it
         let mut groups = input();
-        let n_left = battle(&mut groups);
+        if let Some((_, n_left)) = battle(&mut groups) {
+            println!("{}", n_left);
+        } else {
+            println!("no winner");
+        }
+    } else if task == "boost" {
+        let groups = input();
+
+        // prior to binary search
+        // first find an upper boost that lets immune win
+        let mut boost = 1;
+        loop {
+            println!("trying {}", boost);
+            let mut boosted_groups = boost_groups(&groups, boost);
+            if let Some((side, _)) = battle(&mut boosted_groups) {
+                if side == Side::Immune {
+                    break;
+                }
+            }
+            boost *= 2;
+        }
+
+        // then do the binary search
+        let mut boost_lo = boost / 2;
+        let mut boost_hi = boost;
+        let mut n_left = 0;
+        while boost_lo != boost_hi {
+            let boost_mid = (boost_hi + boost_lo) / 2;
+            println!("{}-{}-{}", boost_lo, boost_mid, boost_hi);
+            let mut boosted_groups = boost_groups(&groups, boost_mid);
+            if let Some((side, n_side)) = battle(&mut boosted_groups) {
+                n_left = n_side;
+                if side == Side::Immune {
+                    println!("  immune");
+                    boost_hi = boost_mid;
+                } else {
+                    println!("  infection");
+                    boost_lo = boost_mid;
+                }
+            } else {
+                boost_lo += 1;
+            }
+        }
+        println!("took {} boost", boost_lo);
         println!("{}", n_left);
+        let mut boosted_groups = boost_groups(&groups, boost_lo);
+        println!("{:?}", battle(&mut boosted_groups));
+        let mut boosted_groups = boost_groups(&groups, 29);
+        println!("{:?}", battle(&mut boosted_groups));
     } else {
         panic!("Don't know how to '{}'", task);
     }
@@ -325,17 +372,17 @@ impl Group {
 fn battle_step(groups: &mut [Group]) {
     let mut target_order = groups
         .iter()
-        .map(|u| (u.effective_power(), u.initiative, u.id))
+        .map(|g| (g.effective_power(), g.initiative, g.id))
         .collect::<Vec<_>>();
     target_order.sort_by_key(|(eff_pow, ini, _)| (-eff_pow, -ini));
     let mut targets: HashMap<usize, usize> = HashMap::new();
-    for (_, _, unit_id) in target_order {
-        let unit = &groups[unit_id];
+    for (_, _, group_id) in target_order {
+        let group = &groups[group_id];
         if let Some(target_id) =
-            unit.select_target(&groups, &targets.values().collect::<Vec<_>>()[..])
+            group.select_target(&groups, &targets.values().collect::<Vec<_>>()[..])
         {
-            if unit.damage_to(&groups[target_id]) > 0 {
-                targets.insert(unit_id, target_id);
+            if group.damage_to(&groups[target_id]) > 0 {
+                targets.insert(group_id, target_id);
             }
         }
     }
@@ -345,39 +392,56 @@ fn battle_step(groups: &mut [Group]) {
         .map(|g| (g.initiative, g.id))
         .collect::<Vec<_>>();
     attack_order.sort_by_key(|(ini, _)| -ini);
-    for (_, unit_id) in attack_order {
-        let unit = &groups[unit_id].clone();
-        if let Some(target_id) = targets.get(&unit_id) {
-            unit.attack(&mut groups[*target_id]);
+    for (_, group_id) in attack_order {
+        let group = &groups[group_id].clone();
+        if let Some(target_id) = targets.get(&group_id) {
+            group.attack(&mut groups[*target_id]);
         }
     }
 }
 
-fn battle(groups: &mut [Group]) -> i64 {
+fn battle(groups: &mut [Group]) -> Option<(Side, i64)> {
+    //let mut i = 0;
+    let mut n_immune = 0;
+    let mut n_infection = 0;
     loop {
         battle_step(groups);
-        let immune_alive = groups
+        let new_n_immune: i64 = groups
             .iter()
-            .any(|u| u.side == Side::Immune && u.n_units > 0);
-        let infection_alive = groups
+            .filter(|g| g.side == Side::Immune)
+            .map(|g| g.n_units)
+            .sum();
+        let new_n_infection: i64 = groups
             .iter()
-            .any(|u| u.side == Side::Infection && u.n_units > 0);
-        if !immune_alive || !infection_alive {
+            .filter(|g| g.side == Side::Infection)
+            .map(|g| g.n_units)
+            .sum();
+        if n_immune == new_n_immune && n_infection == new_n_infection {
+            return None;
+        }
+        n_immune = new_n_immune;
+        n_infection = new_n_infection;
+        if n_immune <= 0 || n_infection <= 0 {
             break;
         }
     }
-    let n_immune: i64 = groups.iter().map(|u| u.n_units).sum();
-    let n_infection: i64 = groups.iter().map(|u| u.n_units).sum();
     if n_immune > 0 {
-        println!("Immune won with {} left", n_immune);
-        n_immune
+        Some((Side::Immune, n_immune))
     } else if n_infection > 0 {
-        println!("Infection won with {} left", n_infection);
-        n_infection
+        Some((Side::Infection, n_infection))
     } else {
-        println!("No one won?!");
-        0
+        None
     }
+}
+
+fn boost_groups(groups: &[Group], boost: i64) -> Vec<Group> {
+    let mut boosted_groups = groups.to_vec();
+    for ref mut group in &mut boosted_groups {
+        if group.side == Side::Immune {
+            group.damage += boost;
+        }
+    }
+    boosted_groups
 }
 
 #[cfg(test)]
@@ -432,6 +496,57 @@ mod tests {
                 initiative: 4,
             },
         ];
-        assert_eq!(5216, battle(&mut groups));
+        assert_eq!(Some((Side::Infection, 5216)), battle(&mut groups));
+    }
+    #[test]
+    fn test_battle_boost() {
+        let groups = vec![
+            Group {
+                id: 0,
+                side: Side::Immune,
+                n_units: 17,
+                hp_each: 5390,
+                immunities: vec![],
+                weaknesses: vec![Attack::Radiation, Attack::Bludgeoning],
+                attack: Attack::Fire,
+                damage: 4507,
+                initiative: 2,
+            },
+            Group {
+                id: 1,
+                side: Side::Immune,
+                n_units: 989,
+                hp_each: 1274,
+                immunities: vec![Attack::Fire],
+                weaknesses: vec![Attack::Bludgeoning, Attack::Slashing],
+                attack: Attack::Slashing,
+                damage: 25,
+                initiative: 3,
+            },
+            Group {
+                id: 2,
+                side: Side::Infection,
+                n_units: 801,
+                hp_each: 4706,
+                immunities: vec![],
+                weaknesses: vec![Attack::Radiation],
+                attack: Attack::Bludgeoning,
+                damage: 116,
+                initiative: 1,
+            },
+            Group {
+                id: 3,
+                side: Side::Infection,
+                n_units: 4485,
+                hp_each: 2961,
+                immunities: vec![Attack::Cold],
+                weaknesses: vec![Attack::Fire, Attack::Cold],
+                attack: Attack::Slashing,
+                damage: 12,
+                initiative: 4,
+            },
+        ];
+        let mut boosted_groups = boost_groups(&groups, 1570);
+        assert_eq!(Some((Side::Immune, 51)), battle(&mut boosted_groups));
     }
 }
