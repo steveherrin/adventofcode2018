@@ -1,27 +1,48 @@
 #![allow(unused_doc_comments)]
+#[macro_use]
+extern crate lazy_static;
+extern crate regex;
 
 use std::cmp::min;
 use std::collections::HashMap;
 use std::env;
+use std::fs;
+use std::num::ParseIntError;
+
+use regex::Regex;
 
 #[allow(unused_assignments)]
 fn main() {
     let args: Vec<String> = env::args().collect();
     let task = &args[1];
+    let filename = &args[2];
+
+    let mut groups: Vec<Group> = Vec::new();
+    let mut side: Option<Side> = None;
+    for line in fs::read_to_string(filename)
+        .unwrap()
+        .split('\n')
+        .filter(|l| !l.trim().is_empty())
+    {
+        if line.starts_with("Immune System") {
+            side = Some(Side::Immune);
+        } else if line.starts_with("Infection") {
+            side = Some(Side::Infection)
+        } else if let Some(s) = side {
+            let id = groups.len();
+            groups.push(group_from_str(line.trim(), id, s).expect("Couldn't parse group"));
+        } else {
+            panic!("Couldn't parse the input file");
+        }
+    }
 
     if task == "battle" {
-        // harcoding my input because it's easier than writing code to parse it
-        let mut groups = input();
         if let Some((_, n_left)) = battle(&mut groups) {
             println!("{}", n_left);
         } else {
             println!("no winner");
         }
     } else if task == "boost" {
-        let groups = input();
-
-        // prior to binary search
-        // first find an upper boost that lets immune win
         let mut boost = 1;
         let mut n_left = 0;
         loop {
@@ -41,239 +62,95 @@ fn main() {
     }
 }
 
-fn input() -> Vec<Group> {
-    vec![
-        Group {
-            id: 0,
-            side: Side::Immune,
-            n_units: 4592,
-            hp_each: 2061,
-            immunities: vec![Attack::Slashing, Attack::Radiation],
-            weaknesses: vec![Attack::Cold],
-            attack: Attack::Fire,
-            damage: 4,
-            initiative: 9,
-        },
-        Group {
-            id: 1,
-            side: Side::Immune,
-            n_units: 1383,
-            hp_each: 3687,
-            immunities: vec![],
-            weaknesses: vec![],
-            attack: Attack::Radiation,
-            damage: 26,
-            initiative: 15,
-        },
-        Group {
-            id: 2,
-            side: Side::Immune,
-            n_units: 2736,
-            hp_each: 6429,
-            immunities: vec![Attack::Slashing],
-            weaknesses: vec![],
-            attack: Attack::Slashing,
-            damage: 20,
-            initiative: 2,
-        },
-        Group {
-            id: 3,
-            side: Side::Immune,
-            n_units: 777,
-            hp_each: 3708,
-            immunities: vec![Attack::Radiation, Attack::Cold],
-            weaknesses: vec![Attack::Slashing, Attack::Fire],
-            attack: Attack::Cold,
-            damage: 39,
-            initiative: 4,
-        },
-        Group {
-            id: 4,
-            side: Side::Immune,
-            n_units: 6761,
-            hp_each: 2792,
-            immunities: vec![
-                Attack::Bludgeoning,
-                Attack::Fire,
-                Attack::Slashing,
-                Attack::Cold,
-            ],
-            weaknesses: vec![],
-            attack: Attack::Radiation,
-            damage: 3,
-            initiative: 17,
-        },
-        Group {
-            id: 5,
-            side: Side::Immune,
-            n_units: 6028,
-            hp_each: 5537,
-            immunities: vec![Attack::Slashing],
-            weaknesses: vec![],
-            attack: Attack::Radiation,
-            damage: 7,
-            initiative: 6,
-        },
-        Group {
-            id: 6,
-            side: Side::Immune,
-            n_units: 2412,
-            hp_each: 2787,
-            immunities: vec![],
-            weaknesses: vec![],
-            attack: Attack::Bludgeoning,
-            damage: 9,
-            initiative: 20,
-        },
-        Group {
-            id: 7,
-            side: Side::Immune,
-            n_units: 6042,
-            hp_each: 7747,
-            immunities: vec![Attack::Radiation],
-            weaknesses: vec![],
-            attack: Attack::Slashing,
-            damage: 12,
-            initiative: 12,
-        },
-        Group {
-            id: 8,
-            side: Side::Immune,
-            n_units: 1734,
-            hp_each: 7697,
-            immunities: vec![],
-            weaknesses: vec![Attack::Radiation, Attack::Cold],
-            attack: Attack::Cold,
-            damage: 38,
-            initiative: 10,
-        },
-        Group {
-            id: 9,
-            side: Side::Immune,
-            n_units: 4391,
-            hp_each: 3250,
-            immunities: vec![],
-            weaknesses: vec![],
-            attack: Attack::Cold,
-            damage: 7,
-            initiative: 19,
-        },
-        Group {
-            id: 10,
-            side: Side::Infection,
-            n_units: 820,
-            hp_each: 46229,
-            immunities: vec![Attack::Cold, Attack::Bludgeoning],
-            weaknesses: vec![],
-            attack: Attack::Slashing,
-            damage: 106,
-            initiative: 18,
-        },
-        Group {
-            id: 11,
-            side: Side::Infection,
-            n_units: 723,
-            hp_each: 30757,
-            immunities: vec![],
-            weaknesses: vec![Attack::Bludgeoning],
-            attack: Attack::Fire,
-            damage: 80,
-            initiative: 3,
-        },
-        Group {
-            id: 12,
-            side: Side::Infection,
-            n_units: 2907,
-            hp_each: 51667,
-            immunities: vec![Attack::Bludgeoning],
-            weaknesses: vec![Attack::Slashing],
-            attack: Attack::Fire,
-            damage: 32,
-            initiative: 1,
-        },
-        Group {
-            id: 13,
-            side: Side::Infection,
-            n_units: 2755,
-            hp_each: 49292,
-            immunities: vec![],
-            weaknesses: vec![Attack::Bludgeoning],
-            attack: Attack::Fire,
-            damage: 34,
-            initiative: 5,
-        },
-        Group {
-            id: 14,
-            side: Side::Infection,
-            n_units: 5824,
-            hp_each: 24708,
-            immunities: vec![
-                Attack::Bludgeoning,
-                Attack::Cold,
-                Attack::Radiation,
-                Attack::Slashing,
-            ],
-            weaknesses: vec![],
-            attack: Attack::Bludgeoning,
-            damage: 7,
-            initiative: 11,
-        },
-        Group {
-            id: 15,
-            side: Side::Infection,
-            n_units: 7501,
-            hp_each: 6943,
-            immunities: vec![Attack::Slashing],
-            weaknesses: vec![Attack::Cold],
-            attack: Attack::Radiation,
-            damage: 1,
-            initiative: 8,
-        },
-        Group {
-            id: 16,
-            side: Side::Infection,
-            n_units: 573,
-            hp_each: 10367,
-            immunities: vec![],
-            weaknesses: vec![Attack::Slashing, Attack::Cold],
-            attack: Attack::Radiation,
-            damage: 30,
-            initiative: 16,
-        },
-        Group {
-            id: 17,
-            side: Side::Infection,
-            n_units: 84,
-            hp_each: 31020,
-            immunities: vec![],
-            weaknesses: vec![Attack::Cold],
-            attack: Attack::Slashing,
-            damage: 639,
-            initiative: 14,
-        },
-        Group {
-            id: 18,
-            side: Side::Infection,
-            n_units: 2063,
-            hp_each: 31223,
-            immunities: vec![Attack::Bludgeoning],
-            weaknesses: vec![Attack::Radiation],
-            attack: Attack::Cold,
-            damage: 25,
-            initiative: 13,
-        },
-        Group {
-            id: 19,
-            side: Side::Infection,
-            n_units: 214,
-            hp_each: 31088,
-            immunities: vec![],
-            weaknesses: vec![Attack::Fire],
-            attack: Attack::Slashing,
-            damage: 271,
-            initiative: 7,
-        },
-    ]
+#[derive(Debug)]
+enum ParseGroupError {
+    Regex,
+    Attack,
+    Number(ParseIntError),
+}
+
+impl From<ParseIntError> for ParseGroupError {
+    fn from(err: ParseIntError) -> ParseGroupError {
+        ParseGroupError::Number(err)
+    }
+}
+
+fn attack_from_str(s: &str) -> Result<Attack, ParseGroupError> {
+    match s.trim() {
+        "fire" => Ok(Attack::Fire),
+        "cold" => Ok(Attack::Cold),
+        "slashing" => Ok(Attack::Slashing),
+        "bludgeoning" => Ok(Attack::Bludgeoning),
+        "radiation" => Ok(Attack::Radiation),
+        _ => Err(ParseGroupError::Attack),
+    }
+}
+
+fn weak_immune_from_str(s: &str) -> Result<(Vec<Attack>, Vec<Attack>), ParseGroupError> {
+    lazy_static! {
+        static ref WEAK_RE: Regex = Regex::new(r"weak to (?P<weak>[\w ,]+)").unwrap();
+        static ref IMMUNE_RE: Regex = Regex::new(r"immune to (?P<immune>[\w ,]+)").unwrap();
+    }
+    let weaknesses: Vec<Attack> = match WEAK_RE.captures(s) {
+        Some(parts) => parts
+            .name("weak")
+            .map_or("", |m| m.as_str())
+            .split(',')
+            .map(attack_from_str)
+            .collect::<Result<Vec<_>, _>>()?,
+        None => Vec::new(),
+    };
+    let immunities: Vec<Attack> = match IMMUNE_RE.captures(s) {
+        Some(parts) => parts
+            .name("immune")
+            .map_or("", |m| m.as_str())
+            .split(',')
+            .map(attack_from_str)
+            .collect::<Result<Vec<_>, _>>()?,
+        None => Vec::new(),
+    };
+    Ok((weaknesses, immunities))
+}
+
+fn group_from_str(s: &str, id: usize, side: Side) -> Result<Group, ParseGroupError> {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(
+            r"(?P<n_units>\d+) units each with (?P<hp>\d+) hit points(?P<effects> \([\w ,;]+\))? with an attack that does (?P<dmg>\d+) (?P<atype>\w+) damage at initiative (?P<ini>\d+)"
+        )
+        .unwrap();
+    }
+    match RE.captures(s) {
+        Some(parts) => {
+            let n_units = parts
+                .name("n_units")
+                .map_or("", |m| m.as_str())
+                .parse::<i64>()?;
+            let hp_each = parts.name("hp").map_or("", |m| m.as_str()).parse::<i64>()?;
+            let damage = parts
+                .name("dmg")
+                .map_or("", |m| m.as_str())
+                .parse::<i64>()?;
+            let attack = attack_from_str(parts.name("atype").map_or("", |m| m.as_str()))?;
+            let initiative = parts
+                .name("ini")
+                .map_or("", |m| m.as_str())
+                .parse::<i64>()?;
+            let (weaknesses, immunities) =
+                weak_immune_from_str(parts.name("effects").map_or("", |m| m.as_str()))?;
+            Ok(Group {
+                id,
+                side,
+                n_units,
+                hp_each,
+                immunities,
+                weaknesses,
+                attack,
+                damage,
+                initiative,
+            })
+        }
+        None => Err(ParseGroupError::Regex),
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -368,7 +245,6 @@ fn battle_step(groups: &mut [Group]) {
 }
 
 fn battle(groups: &mut [Group]) -> Option<(Side, i64)> {
-    //let mut i = 0;
     let mut n_immune = 0;
     let mut n_infection = 0;
     loop {
